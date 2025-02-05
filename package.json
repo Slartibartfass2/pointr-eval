@@ -1,0 +1,29 @@
+{
+  "name": "pointr-eval",
+  "version": "0.1.0",
+  "description": "Evaluation of the flowr pointer analysis",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Slartibartfass2/pointr-eval.git"
+  },
+  "license": "GPL-3.0-or-later",
+  "author": "Slartibartfass2",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p .",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@types/eslint": "^9.6.1",
+    "@types/eslint-config-prettier": "^6.11.3",
+    "@typescript-eslint/eslint-plugin": "^8.23.0",
+    "@typescript-eslint/parser": "^8.23.0",
+    "eslint": "^9.19.0",
+    "eslint-config-prettier": "^10.0.1",
+    "jiti": "^2.4.2",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.23.0"
+  }
+}
