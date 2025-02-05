@@ -1,21 +1,22 @@
 {
-  "compilerOptions": {
-    "allowJs": false,
-    "checkJs": false,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "module": "CommonJS",
-    "outDir": "./dist/",
-    "esModuleInterop": true,
-    "incremental": true,
-    "declaration": true,
-    "target": "ESNext",
-    "skipLibCheck": true,
-    "moduleResolution": "Node",
-    "strict": true,
-    "alwaysStrict": true,
-    "sourceMap": true,
-    "noUncheckedSideEffectImports": true
-  },
-  "exclude": ["node_modules", "dist"]
+    "compilerOptions": {
+        "allowJs": false,
+        "checkJs": false,
+        "forceConsistentCasingInFileNames": true,
+        "resolveJsonModule": true,
+        "module": "CommonJS",
+        "outDir": "./dist/",
+        "esModuleInterop": true,
+        "incremental": true,
+        "declaration": true,
+        "target": "ESNext",
+        "skipLibCheck": true,
+        "moduleResolution": "Node",
+        // "strict": true,
+        // "alwaysStrict": true,
+        "sourceMap": true,
+        // "noUncheckedSideEffectImports": true,
+        "sourceRoot": "./src"
+    },
+    "exclude": ["node_modules", "dist"]
 }
