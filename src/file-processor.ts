@@ -4,10 +4,18 @@ import { setConfigFile } from "@eagleoutice/flowr/config";
 import { BenchmarkSlicer, BenchmarkSlicerStats } from "@eagleoutice/flowr/benchmark/slicer";
 import { DefaultAllVariablesFilter } from "@eagleoutice/flowr/slicing/criterion/filters/all-variables";
 import { requestFromInput } from "@eagleoutice/flowr/r-bridge/retriever";
-import { EvalStats } from "./model";
+import { CompareOptions, defaultTotalStats, EvalStats, TotalStats } from "./model";
 import { replacer } from "./utils";
-import { SlicerStatsDataflow } from "@eagleoutice/flowr/benchmark/stats/stats";
+import { PerSliceStats, SlicerStatsDataflow } from "@eagleoutice/flowr/benchmark/stats/stats";
 import { CommandLineOptions } from "command-line-args";
+import {
+    IdentifierReference,
+    InGraphIdentifierDefinition,
+} from "@eagleoutice/flowr/dataflow/environments/identifier";
+import {
+    ContainerIndicesCollection,
+    isParentContainerIndex,
+} from "@eagleoutice/flowr/dataflow/graph/vertex";
 
 export class FileProcessor {
     parsedOptions: CommandLineOptions;
@@ -39,6 +47,7 @@ export class FileProcessor {
         } catch (error) {
             throw new Error(`Could not read file ${this.path}`, { cause: error });
         }
+        const totalLineCount = rcode.split("\n").length + 1;
 
         // Running analysis with and without pointer analysis
 
@@ -58,7 +67,7 @@ export class FileProcessor {
         await this.storeResult(resultSensitive, true);
         const summarySensitive = this.summarizeResult(resultSensitive);
 
-        this.compareResults(summaryInsensitive, summarySensitive);
+        this.compareResults(totalLineCount, summaryInsensitive, summarySensitive);
     }
 
     private async sliceForFile(fileContent: string) {
@@ -95,73 +104,75 @@ export class FileProcessor {
                     children: [],
                 },
             },
+            dataflow: {
+                ...result.dataflow,
+                environment: {
+                    ...result.dataflow.environment,
+                    current: {
+                        ...result.dataflow.environment.current,
+                        parent: {
+                            ...result.dataflow.environment.current.parent,
+                            memory: new Map(),
+                        },
+                        memory: new Map(),
+                    },
+                },
+            },
         };
         await fs.writeFile(outPath, JSON.stringify(result, replacer));
     }
 
     private summarizeResult(result: BenchmarkSlicerStats): EvalStats {
-        const { stats /*parse, normalize, dataflow*/ } = result;
+        const { stats, /*parse, normalize,*/ dataflow } = result;
         const { /*commonMeasurements,*/ perSliceMeasurements, dataflow: dataflowStats } = stats;
 
         return {
             ...dataflowStats,
             perSliceMeasurements,
+            dataflow,
         };
     }
 
-    private compareResults(resultInsensitive: EvalStats, resultSensitive: EvalStats) {
-        const numberStats: (keyof SlicerStatsDataflow<number>)[] = [
+    private compareResults(
+        totalLineCount: number,
+        resultInsensitive: EvalStats,
+        resultSensitive: EvalStats,
+    ) {
+        const numberStats: (keyof SlicerStatsDataflow<number> | "definedIndices")[] = [
             "numberOfNodes",
             "numberOfEdges",
             "numberOfCalls",
             "numberOfFunctionDefinitions",
             "sizeOfObject",
+            "definedIndices",
         ] as const;
 
-        let comparisons = [];
-        for (const stat of numberStats) {
-            const comp = this.compareNumberStat(
-                stat,
-                resultInsensitive[stat],
-                resultSensitive[stat],
-            );
-            comparisons.push(comp);
+        const comparison = [];
+        comparison.push(`=== Dataflow stats: ===`);
+        function bar(stat: (typeof numberStats)[0], stats: EvalStats): number {
+            if (stat === "definedIndices") {
+                return countDefinedIndices(stats.dataflow.out);
+            } else {
+                return stats[stat];
+            }
         }
-
-        let maxLengths = comparisons.reduce(
-            (max, comp) => {
-                for (let i = 0; i < 4; i++) {
-                    max[i] = comp[i].length > max[i] ? comp[i].length : max[i];
-                }
-                return max;
-            },
-            [0, 0, 0, 0],
+        comparison.push(
+            ...this.generateGroupStats(
+                numberStats,
+                (stat) => bar(stat, resultInsensitive),
+                (stat) => bar(stat, resultSensitive),
+            ),
         );
 
-        const comparison = [];
-        for (const comp of comparisons) {
-            comp[0] = comp[0].padEnd(maxLengths[0]);
-            comp[1] = comp[1].padStart(maxLengths[1]);
-            comp[2] = comp[2].padEnd(maxLengths[2]);
-            comp[3] = comp[3].padEnd(maxLengths[3]);
-            comparison.push(`${comp[0]}:   ${comp[1]} vs ${comp[2]}   |   ${comp[3]}`);
-        }
-
-        const sliceStats: ("total" | "static slicing" | "reconstruct code")[] = [
+        const sliceStats: (keyof TotalStats)[] = [
             "total",
             "static slicing",
             "reconstruct code",
+            "reducedLines",
+            "reducedLinePercentage",
         ];
-        const totalSensitiveStats = {
-            total: 0,
-            "static slicing": 0,
-            "reconstruct code": 0,
-        };
-        const totalInsensitiveStats = {
-            total: 0,
-            "static slicing": 0,
-            "reconstruct code": 0,
-        };
+        const totalSensitiveStats: TotalStats = defaultTotalStats();
+        const totalInsensitiveStats: TotalStats = defaultTotalStats();
         const insensitiveMeasurements = resultInsensitive.perSliceMeasurements;
         for (const [[criterion], insensitivePerSliceStats] of insensitiveMeasurements.entries()) {
             const sensitivePerSliceStats = resultSensitive.perSliceMeasurements
@@ -172,100 +183,63 @@ export class FileProcessor {
                 continue;
             }
 
-            comparisons = [];
-            for (const stat of sliceStats) {
-                const insensitiveValue =
-                    parseInt(insensitivePerSliceStats.measurements.get(stat).toString()) / 1000;
-                const sensitiveValue =
-                    parseInt(sensitivePerSliceStats.measurements.get(stat).toString()) / 1000;
-                totalSensitiveStats[stat] += sensitiveValue;
-                totalInsensitiveStats[stat] += insensitiveValue;
-                const comp = this.compareNumberStat(stat, insensitiveValue, sensitiveValue);
-                comparisons.push(comp);
+            function foo(stat: (typeof sliceStats)[0], stats: PerSliceStats): number {
+                if (stat === "reducedLines") {
+                    return totalLineCount - stats.reconstructedCode.code.split("\n").length + 1;
+                } else if (stat === "reducedLinePercentage") {
+                    return (
+                        ((stats.reconstructedCode.code.split("\n").length + 1) / totalLineCount) *
+                        100
+                    );
+                } else {
+                    return parseInt(stats.measurements.get(stat).toString()) / 1000;
+                }
             }
+            const perSliceComparison = this.generateGroupStats(
+                sliceStats,
+                (stat) => foo(stat, insensitivePerSliceStats),
+                (stat) => foo(stat, sensitivePerSliceStats),
+                {
+                    isFloat: (stat) => stat !== "reducedLines",
+                    statValues: (stat, insensitiveValue, sensitiveValue) => {
+                        totalSensitiveStats[stat] += sensitiveValue;
+                        totalInsensitiveStats[stat] += insensitiveValue;
+                    },
+                },
+            );
 
             if (this.parsedOptions.debug) {
                 comparison.push(`=== Per slice stats for ${criterion}: ===`);
-
-                maxLengths = comparisons.reduce(
-                    (max, comp) => {
-                        for (let i = 0; i < 4; i++) {
-                            max[i] = comp[i].length > max[i] ? comp[i].length : max[i];
-                        }
-                        return max;
-                    },
-                    [0, 0, 0, 0],
-                );
-
-                for (const comp of comparisons) {
-                    comp[0] = comp[0].padEnd(maxLengths[0]);
-                    comp[1] = comp[1].padStart(maxLengths[1]);
-                    comp[2] = comp[2].padEnd(maxLengths[2]);
-                    comp[3] = comp[3].padEnd(maxLengths[3]);
-                    comparison.push(`${comp[0]}:   ${comp[1]} vs ${comp[2]}   |   ${comp[3]}`);
-                }
+                comparison.push(...perSliceComparison);
             }
         }
 
         comparison.push(`=== Total runtime stats (ms): ===`);
-        comparisons = [];
-        for (const stat of sliceStats) {
-            const comp = this.compareNumberStat(
-                stat,
-                totalInsensitiveStats[stat] / 1000,
-                totalSensitiveStats[stat] / 1000,
-                true,
-            );
-            comparisons.push(comp);
+        function foo(stat: (typeof sliceStats)[0], stats: TotalStats, factor: number = 1): number {
+            if (stat === "reducedLines" || stat === "reducedLinePercentage") {
+                return stats[stat] / factor;
+            } else {
+                return stats[stat] / 1000 / factor;
+            }
         }
-
-        maxLengths = comparisons.reduce(
-            (max, comp) => {
-                for (let i = 0; i < 4; i++) {
-                    max[i] = comp[i].length > max[i] ? comp[i].length : max[i];
-                }
-                return max;
-            },
-            [0, 0, 0, 0],
+        comparison.push(
+            ...this.generateGroupStats(
+                sliceStats,
+                (stat) => foo(stat, totalInsensitiveStats),
+                (stat) => foo(stat, totalSensitiveStats),
+                { isFloat: true },
+            ),
         );
-
-        for (const comp of comparisons) {
-            comp[0] = comp[0].padEnd(maxLengths[0]);
-            comp[1] = comp[1].padStart(maxLengths[1]);
-            comp[2] = comp[2].padEnd(maxLengths[2]);
-            comp[3] = comp[3].padEnd(maxLengths[3]);
-            comparison.push(`${comp[0]}:   ${comp[1]} vs ${comp[2]}   |   ${comp[3]}`);
-        }
 
         comparison.push(`=== Avg runtime stats (ms): ===`);
-        comparisons = [];
-        for (const stat of sliceStats) {
-            const comp = this.compareNumberStat(
-                stat,
-                totalInsensitiveStats[stat] / 1000 / insensitiveMeasurements.size,
-                totalSensitiveStats[stat] / 1000 / insensitiveMeasurements.size,
-                true,
-            );
-            comparisons.push(comp);
-        }
-
-        maxLengths = comparisons.reduce(
-            (max, comp) => {
-                for (let i = 0; i < 4; i++) {
-                    max[i] = comp[i].length > max[i] ? comp[i].length : max[i];
-                }
-                return max;
-            },
-            [0, 0, 0, 0],
+        comparison.push(
+            ...this.generateGroupStats(
+                sliceStats,
+                (stat) => foo(stat, totalInsensitiveStats, insensitiveMeasurements.size),
+                (stat) => foo(stat, totalSensitiveStats, insensitiveMeasurements.size),
+                { isFloat: true },
+            ),
         );
-
-        for (const comp of comparisons) {
-            comp[0] = comp[0].padEnd(maxLengths[0]);
-            comp[1] = comp[1].padStart(maxLengths[1]);
-            comp[2] = comp[2].padEnd(maxLengths[2]);
-            comp[3] = comp[3].padEnd(maxLengths[3]);
-            comparison.push(`${comp[0]}:   ${comp[1]} vs ${comp[2]}   |   ${comp[3]}`);
-        }
 
         logger.info(`Comparison of results for ${this.path}:\n${comparison.join("\n")}\n`);
     }
@@ -292,4 +266,76 @@ export class FileProcessor {
 
         return [name, insensitiveStr, sensitiveStr, change];
     }
+
+    private generateGroupStats<T>(
+        statNames: T[],
+        getInsensitiveValue: (stat: T) => number,
+        getSensitiveValue: (stat: T) => number,
+        options: Partial<CompareOptions<T>> = {},
+    ) {
+        const { isFloat = false, statValues = () => {} } = options;
+
+        const comparisons = [];
+        for (const stat of statNames) {
+            const insensitiveValue = getInsensitiveValue(stat);
+            const sensitiveValue = getSensitiveValue(stat);
+            const comp = this.compareNumberStat(
+                stat.toString(),
+                insensitiveValue,
+                sensitiveValue,
+                typeof isFloat === "function" ? isFloat(stat) : isFloat,
+            );
+            statValues(stat, insensitiveValue, sensitiveValue);
+            comparisons.push(comp);
+        }
+
+        const maxLengths = comparisons.reduce(
+            (max, comp) => {
+                for (let i = 0; i < 4; i++) {
+                    max[i] = comp[i].length > max[i] ? comp[i].length : max[i];
+                }
+                return max;
+            },
+            [0, 0, 0, 0],
+        );
+
+        const comparison = [];
+        for (const comp of comparisons) {
+            comp[0] = comp[0].padEnd(maxLengths[0]);
+            comp[1] = comp[1].padStart(maxLengths[1]);
+            comp[2] = comp[2].padEnd(maxLengths[2]);
+            comp[3] = comp[3].padEnd(maxLengths[3]);
+            comparison.push(`${comp[0]}:   ${comp[1]} vs ${comp[2]}   |   ${comp[3]}`);
+        }
+
+        return comparison;
+    }
+}
+
+function countDefinedIndices(references: readonly IdentifierReference[]): number {
+    let numberOfIndices = 0;
+    for (const reference of references) {
+        if ("indicesCollection" in reference) {
+            const graphReference = reference as InGraphIdentifierDefinition;
+            numberOfIndices += countIndices(graphReference.indicesCollection);
+        }
+    }
+    return numberOfIndices;
+}
+
+function countIndices(collection: ContainerIndicesCollection): number {
+    if (!collection) {
+        return 0;
+    }
+
+    let numberOfIndices = 0;
+    for (const indices of collection) {
+        for (const index of indices.indices) {
+            numberOfIndices++;
+            if (isParentContainerIndex(index)) {
+                numberOfIndices += this.countIndices(index.subIndices);
+            }
+        }
+    }
+    return numberOfIndices;
 }
