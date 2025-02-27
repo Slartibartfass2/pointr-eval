@@ -30,7 +30,7 @@
         "typescript-eslint": "^8.23.0"
     },
     "dependencies": {
-        "@eagleoutice/flowr": "2.2.2",
+        "@eagleoutice/flowr": "^2.2.10",
         "command-line-args": "^6.0.1",
         "glob": "^11.0.1",
         "winston": "^3.17.0"
