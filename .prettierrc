@@ -11,10 +11,6 @@
             "options": {
                 "tabWidth": 2
             }
-        },
-        {
-            "files": "*.json",
-            "excludeFiles": "examples/**/*.json"
         }
     ]
 }

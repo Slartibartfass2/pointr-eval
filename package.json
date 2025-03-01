@@ -11,9 +11,14 @@
     "scripts": {
         "build": "tsc -p .",
         "start": "node dist/src/index.js",
-        "dev": "npm run build && npm start",
+        "dev": "npm run build && npm start --",
         "lint": "prettier --check . && eslint .",
-        "format": "prettier --write ."
+        "format": "prettier --write .",
+        "discover": "npm run dev discover --",
+        "benchmark": "npm run dev benchmark --",
+        "summarizer": "npm run dev summarizer --",
+        "eval": "npm run dev eval --",
+        "full": "npm run dev full --"
     },
     "devDependencies": {
         "@types/command-line-args": "^5.2.3",
