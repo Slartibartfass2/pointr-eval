@@ -69,14 +69,14 @@ export async function runBenchmark(argv: string[]) {
 
     const benchmarkPath = path.join(flowrPath, "dist/src/cli/benchmark-app");
     const baseArgs = [
-        "--max-file-slices",
-        "15",
+        // "--max-file-slices",
+        // "15",
         "--parser",
         "tree-sitter",
         "-i",
         filesPath,
         "-r", // runs
-        "1",
+        "10",
         "-t", // threshold (default 75)
         "20",
     ];
@@ -90,6 +90,9 @@ export async function runBenchmark(argv: string[]) {
     const sensProc = forkAsync(benchmarkPath, sensArgs, logSensPath).then(() => {
         logger.info(`Finished the benchmark with pointer analysis - ${currentISODate()}`);
     });
+
+    // TODO: check whether this affects the benchmark results
+    // await sensProc;
 
     logger.info(`Running the benchmark without pointer analysis - ${currentISODate()}`);
     const insensProc = forkAsync(benchmarkPath, insensArgs, logInsensPath).then(() => {

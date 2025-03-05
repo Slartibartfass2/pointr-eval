@@ -5,7 +5,8 @@ import { assertDirectory } from "../utils";
 import fs from "fs";
 import assert from "assert";
 import { UltimateSlicerStats } from "@eagleoutice/flowr/benchmark/summarizer/data";
-import { createUltimateEvalStats, statsToLaTeX } from "../model";
+import { createUltimateEvalStats, printResults, statsToLaTeX } from "../model";
+
 /**
  * Run the evaluation command.
  *
@@ -57,51 +58,11 @@ export async function runEval(argv: string[]) {
         JSON.stringify(evalStats, replacer),
     );
 
-    const sensReduction = sensResult.reductionNoFluff;
-    const insensReduction = insensResult.reductionNoFluff;
-
-    const keys = Object.keys(sensReduction);
-    const maxKeyLength = keys.reduce((max, key) => Math.max(max, key.length), 0);
-
-    const header = `Reduction: Field`;
-    logger.info(
-        `${header}${padding(header, maxKeyLength)}|  Insens |   Sens  |  Diff  |  Diff%  |`,
-    );
-    logger.info(`-----------------------------------------------------------------------`);
-    for (const key of Object.keys(sensReduction)) {
-        const insensVal = insensReduction[key]["mean"];
-        const sensVal = sensReduction[key]["mean"];
-        const diff = sensVal - insensVal;
-        const diffPercentage = diff / insensVal;
-
-        logger.info(
-            `${key}: ${padding(key, maxKeyLength)}${padP(insensVal)}   ${padP(sensVal)}   ${padP(diff)}  ${padP(diffPercentage)}`,
-        );
-    }
+    printResults(evalStats);
 
     fs.writeFileSync(path.join(resultsPath, "eval-stats.tex"), statsToLaTeX(evalStats));
 
     logEnd("eval");
-}
-
-function padding(key: string, length: number) {
-    return " ".repeat(length - key.length);
-}
-
-function padP(value: number) {
-    return String(asPercentage(value)).padEnd(7);
-}
-
-function asPercentage(num: number): string {
-    if (isNaN(num)) {
-        return "??%";
-    }
-    return `${roundTo(num * 100, 3)}%`;
-}
-
-function roundTo(num: number, digits = 4): number {
-    const factor = Math.pow(10, digits);
-    return Math.round(num * factor) / factor;
 }
 
 function replacer<T>(key: string, value: T) {

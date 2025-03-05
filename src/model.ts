@@ -9,6 +9,7 @@ import {
     UltimateSlicerStats,
 } from "@eagleoutice/flowr/benchmark/summarizer/data";
 import { SummarizedMeasurement } from "@eagleoutice/flowr/util/summarizer";
+import { asPercentage } from "./format";
 
 type EvalValues = {
     insensitiveValue: number;
@@ -16,6 +17,17 @@ type EvalValues = {
     diff: number;
     diffRelative: number;
 };
+
+function isEvalValues(value: unknown): value is EvalValues {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        "insensitiveValue" in value &&
+        "sensitiveValue" in value &&
+        "diff" in value &&
+        "diffRelative" in value
+    );
+}
 
 type EvalWrapper<T> = {
     [P in keyof T]: EvalValues;
@@ -239,26 +251,33 @@ function createEvalSlicerStatsDataflow(
 }
 
 export function statsToLaTeX(stats: EvalUltimateSlicerStats): string {
-    return serializeObject(stats)
-        .map(([key, value]) => `\\def\\${formatKey(key, "_", true)}{${value}}`)
+    return flattenObject(stats)
+        .map(([key, value]) => `\\def\\${key.map(capitalize).join("")}{${JSON.stringify(value)}}`)
         .join("\n");
 }
 
-function serializeObject(object: unknown, prevPrefix = ""): [string, string][] {
-    const lines: [string, string][] = [];
-    const prefix = prevPrefix ? `${prevPrefix}_` : "";
-    if (object instanceof Map) {
+function flattenObject(
+    object: unknown,
+    stopAtObject: (object: unknown) => boolean = () => false,
+    previousKeys: string[] = [],
+): [string[], unknown][] {
+    const lines: [string[], unknown][] = [];
+    if (stopAtObject(object)) {
+        lines.push([previousKeys, object]);
+    } else if (object instanceof Map) {
         for (const [key, val] of object.entries()) {
-            lines.push(...serializeObject(val, `${prefix}${formatKey(key)}`));
+            lines.push(...flattenObject(val, stopAtObject, [...previousKeys, formatKey(key)]));
         }
     } else if (typeof object === "object") {
         for (const key in object) {
             if (Object.hasOwn(object, key)) {
-                lines.push(...serializeObject(object[key], `${prefix}${formatKey(key)}`));
+                lines.push(
+                    ...flattenObject(object[key], stopAtObject, [...previousKeys, formatKey(key)]),
+                );
             }
         }
     } else {
-        lines.push([prevPrefix, `${JSON.stringify(object)}`]);
+        lines.push([previousKeys, object]);
     }
     return lines;
 }
@@ -269,7 +288,32 @@ function formatKey(key: string, sep = " ", upper = false): string {
         (upper ? "" : parts[0]) +
         parts
             .slice(upper ? 0 : 1)
-            .map((part) => part[0].toUpperCase() + part.slice(1))
+            .map(capitalize)
             .join("")
     );
+}
+
+function capitalize(text: string): string {
+    return text[0].toUpperCase() + text.slice(1);
+}
+
+export function printResults(stats: EvalUltimateSlicerStats) {
+    const a = flattenObject(stats, isEvalValues).map(
+        ([key, value]) => [key.map(capitalize).join(""), value] as [string, unknown],
+    );
+    const obj = {};
+    a.forEach(([key, value]) => {
+        if (isEvalValues(value) && key.includes("Mean")) {
+            obj[key] = {
+                ...value,
+                "diffRelative%": Number.isFinite(value.diffRelative)
+                    ? asPercentage(value.diffRelative)
+                    : "",
+                dir: value.diff < 0 ? "↓" : value.diff > 0 ? "↑" : "-",
+            };
+        } else {
+            // logger.info(`${key}: ${JSON.stringify(value)}`);
+        }
+    });
+    console.table(obj);
 }
