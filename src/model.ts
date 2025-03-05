@@ -10,6 +10,7 @@ import {
 } from "@eagleoutice/flowr/benchmark/summarizer/data";
 import { SummarizedMeasurement } from "@eagleoutice/flowr/util/summarizer";
 import { asPercentage } from "./format";
+import { SlicerStatsDataflow } from "./flowr-logic";
 
 type EvalValues = {
     insensitiveValue: number;
@@ -32,19 +33,6 @@ function isEvalValues(value: unknown): value is EvalValues {
 type EvalWrapper<T> = {
     [P in keyof T]: EvalValues;
 };
-
-// Define up-to-date types from the flowr package
-interface SlicerStatsDataflow<T = number> {
-    numberOfNodes: T;
-    numberOfEdges: T;
-    numberOfCalls: T;
-    numberOfFunctionDefinitions: T;
-    /* size of object in bytes as measured by v8 serialization */
-    sizeOfObject: T;
-    storedVertexIndices: T;
-    storedEnvIndices: T;
-    overwrittenIndices: T;
-}
 
 type EvalMap<K, V> = Map<K, EvalWrapper<V>>;
 type EvalSummarizedMeasurement = EvalWrapper<SummarizedMeasurement>;

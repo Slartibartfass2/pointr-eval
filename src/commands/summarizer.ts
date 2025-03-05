@@ -3,6 +3,7 @@ import { logEnd, logger, logStart } from "../logger";
 import fs from "fs";
 import path from "path";
 import { assertDirectory, buildFlowr, currentISODate, forkAsync } from "../utils";
+import { processSummarizedRunMeasurement } from "../flowr-logic";
 
 /**
  * Run the summarizer command.
@@ -84,5 +85,32 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
 
     await Promise.all([sensProc, insensProc]);
 
+    summarizeRunsPerFile(sensPath);
+    summarizeRunsPerFile(insensPath);
+
     logEnd("summarizer");
+}
+
+function summarizeRunsPerFile(dir: string) {
+    const dirEntries = fs.readdirSync(dir, { recursive: true, withFileTypes: true });
+    const runsPerFile = new Map<string, string[]>();
+    for (const dir of dirEntries) {
+        const fileName = dir.name;
+        const dirPath = dir.parentPath;
+
+        if (dir.isFile() && fileName.endsWith(".json")) {
+            if (!runsPerFile.has(dirPath)) {
+                runsPerFile.set(dirPath, []);
+            }
+            runsPerFile.get(dirPath)?.push(path.join(dirPath, fileName));
+        }
+    }
+
+    for (const [summaryPath, runFiles] of runsPerFile) {
+        processSummarizedRunMeasurement(
+            summaryPath,
+            runFiles,
+            path.join(summaryPath, "summary-per-file.json"),
+        );
+    }
 }
