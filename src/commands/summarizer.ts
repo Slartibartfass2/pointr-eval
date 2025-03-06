@@ -2,8 +2,10 @@ import commandLineArgs, { OptionDefinition } from "command-line-args";
 import { logEnd, logger, logStart } from "../logger";
 import fs from "fs";
 import path from "path";
-import { assertDirectory, buildFlowr, currentISODate, forkAsync } from "../utils";
+import { assertDirectory, buildFlowr, currentISODate, forkAsync, getRepoInfo } from "../utils";
 import { processSummarizedRunMeasurement } from "../flowr-logic";
+import { RepoInfo } from "../model";
+import assert from "assert";
 
 /**
  * Run the summarizer command.
@@ -58,6 +60,18 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
     fs.writeFileSync(logSensPath, "");
     const logInsensPath = path.join(resultsPath, "summary-insens.log");
     fs.writeFileSync(logInsensPath, "");
+
+    // Check whether repo info is consistent to assure correctness
+    const repoInfo = await getRepoInfo(flowrPath);
+    logger.verbose(`flowr repo info: ${JSON.stringify(repoInfo)}`);
+    const benchRepoInfo = JSON.parse(
+        fs.readFileSync(path.join(resultsPath, "repo-info.json"), "utf8"),
+    ) as { flowr: RepoInfo };
+    assert.deepStrictEqual(
+        repoInfo,
+        benchRepoInfo.flowr,
+        "The flowr repo info does not match the benchmark repo info. This may lead to incorrect results.",
+    );
 
     const summarizerPath = path.join(flowrPath, "dist/src/cli/summarizer-app");
     const baseArgs = [];

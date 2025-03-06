@@ -5,7 +5,13 @@ import { assertDirectory } from "../utils";
 import fs from "fs";
 import assert from "assert";
 import { UltimateSlicerStats } from "@eagleoutice/flowr/benchmark/summarizer/data";
-import { createUltimateEvalStats, printResults, statsToLaTeX } from "../model";
+import {
+    createUltimateEvalStats,
+    printResults,
+    RepoInfo,
+    repoInfoToLatex,
+    statsToLaTeX,
+} from "../model";
 
 /**
  * Run the evaluation command.
@@ -60,7 +66,14 @@ export async function runEval(argv: string[]) {
 
     printResults(evalStats);
 
-    fs.writeFileSync(path.join(resultsPath, "eval-stats.tex"), statsToLaTeX(evalStats));
+    const repoInfo = JSON.parse(
+        fs.readFileSync(path.join(resultsPath, "repo-info.json"), "utf8"),
+    ) as { flowr: RepoInfo; ssoc: RepoInfo };
+
+    let latex = statsToLaTeX(evalStats);
+    latex += "\n" + repoInfoToLatex(repoInfo.flowr, "flowr");
+    latex += "\n" + repoInfoToLatex(repoInfo.ssoc, "ssoc-data");
+    fs.writeFileSync(path.join(resultsPath, "eval-stats.tex"), latex);
 
     logEnd("eval");
 }

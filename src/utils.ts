@@ -2,21 +2,29 @@ import fs from "fs";
 import { exec, fork } from "child_process";
 import { logger } from "./logger";
 import path from "path";
+import { RepoInfo } from "./model";
 
 /**
  * Execute a command asynchronously.
  *
  * @param command - The command to execute.
  * @param cwd - The working directory.
- * @param logPath - The path to the log file.
+ * @param logPath - The path to the log file. If not provided, the output will be returned as a string.
  * @returns A promise that resolves when the command has finished.
  */
-export async function execAsync(command: string, cwd: string, logPath: string): Promise<void> {
+export async function execAsync(
+    command: string,
+    cwd: string,
+    logPath: string | undefined = undefined,
+    returnOutput: boolean = false,
+): Promise<string> {
+    logger.verbose(`Running command: '${command}' in ${cwd}`);
     const childProcess = exec(command, { cwd });
-    return new Promise((resolve, reject) => {
+    let result: string = undefined;
+    return new Promise<string>((resolve, reject) => {
         childProcess.on("exit", (code, signal) => {
             if (code === 0) {
-                resolve();
+                resolve(result);
             } else {
                 reject(
                     new Error(`Command '${command}' failed with code ${code} and signal ${signal}`),
@@ -27,10 +35,21 @@ export async function execAsync(command: string, cwd: string, logPath: string): 
             reject(error);
         });
         childProcess.stdout?.on("data", (data) => {
-            fs.appendFileSync(logPath, data);
+            if (logPath) {
+                fs.appendFileSync(logPath, data);
+            }
+            if (returnOutput) {
+                if (result === undefined) {
+                    result = data;
+                } else {
+                    result += data;
+                }
+            }
         });
         childProcess.stderr?.on("data", (data) => {
-            fs.appendFileSync(logPath, data);
+            if (logPath) {
+                fs.appendFileSync(logPath, data);
+            }
         });
     });
 }
@@ -106,4 +125,32 @@ export async function buildFlowr(flowrPath: string, outputPath: string): Promise
     logger.info(`Building the flowr repo - ${currentISODate()}`);
     await execAsync("npm run build-dev", flowrPath, logPath);
     logger.info(`Finished building the flowr repo - ${currentISODate()}`);
+}
+
+async function getCommandResult(command: string, cwd: string): Promise<string | undefined> {
+    let result: string | undefined;
+    await execAsync(command, cwd, undefined, true)
+        .then((v) => (result = v))
+        .catch(() => (result = undefined));
+    return result?.trim();
+}
+
+async function getLastRepoTag(path: string): Promise<string | undefined> {
+    return await getCommandResult("git describe --tags --abbrev=0", path);
+}
+
+async function getRepoCommit(path: string): Promise<string | undefined> {
+    return await getCommandResult("git rev-parse HEAD", path);
+}
+
+async function getRepoBranch(path: string): Promise<string | undefined> {
+    return await getCommandResult("git rev-parse --abbrev-ref HEAD", path);
+}
+
+export async function getRepoInfo(path: string): Promise<RepoInfo> {
+    return {
+        tag: await getLastRepoTag(path),
+        commit: await getRepoCommit(path),
+        branch: await getRepoBranch(path),
+    };
 }

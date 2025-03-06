@@ -305,3 +305,16 @@ export function printResults(stats: EvalUltimateSlicerStats) {
     });
     console.table(obj);
 }
+
+export interface RepoInfo {
+    tag: string | undefined;
+    commit: string | undefined;
+    branch: string | undefined;
+}
+
+export function repoInfoToLatex(repoInfo: RepoInfo, repoName: string): string {
+    const repo = formatKey(repoName, "-", true);
+    return `\\def\\${repo}Tag{${repoInfo.tag ?? ""}}
+\\def\\${repo}Commit{${repoInfo.commit ?? ""}}
+\\def\\${repo}Branch{${repoInfo.branch ?? ""}}`;
+}

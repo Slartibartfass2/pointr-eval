@@ -9,7 +9,9 @@ import {
     currentISODate,
     ensureDirectoryExists,
     forkAsync,
+    getRepoInfo,
 } from "../utils";
+import { RepoInfo } from "../model";
 
 /**
  * Run the benchmark command.
@@ -67,6 +69,27 @@ export async function runBenchmark(argv: string[]) {
     const logInsensPath = path.join(outputPath, "bench-insens.log");
     fs.writeFileSync(logInsensPath, "");
 
+    const discoverData = JSON.parse(fs.readFileSync(filesPath, "utf8")) as {
+        repo: RepoInfo;
+        files: string[];
+    };
+    logger.verbose(
+        `Using discover data: repoInfo=${JSON.stringify(discoverData.repo)}, files=[${discoverData.files.length} R files]`,
+    );
+
+    // Write discover data to the output directory to have all at one place
+    const benchFilesPath = path.join(outputPath, "files.json");
+    fs.writeFileSync(benchFilesPath, JSON.stringify(discoverData.files));
+
+    // Write repo infos to output directory
+    const flowrRepoInfo = await getRepoInfo(flowrPath);
+    logger.verbose(`flowr repo info: ${JSON.stringify(flowrRepoInfo)}`);
+    const repoInfos = {
+        ssoc: discoverData.repo,
+        flowr: flowrRepoInfo,
+    };
+    fs.writeFileSync(path.join(outputPath, "repo-info.json"), JSON.stringify(repoInfos));
+
     const benchmarkPath = path.join(flowrPath, "dist/src/cli/benchmark-app");
     const baseArgs = [
         // "--max-file-slices",
@@ -74,7 +97,7 @@ export async function runBenchmark(argv: string[]) {
         "--parser",
         "tree-sitter",
         "-i",
-        filesPath,
+        benchFilesPath,
         "-r", // runs
         "10",
         "-t", // threshold (default 75)
