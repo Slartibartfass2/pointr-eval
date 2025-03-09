@@ -45,8 +45,6 @@ export class Cli {
             return;
         }
 
-        logger.info(`Running command ${this.parsedOptions.name}`);
-
         if (this.parsedOptions.name === "discover") {
             await runDiscover(this.argv);
         } else if (this.parsedOptions.name === "benchmark") {

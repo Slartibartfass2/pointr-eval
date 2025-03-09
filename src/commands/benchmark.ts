@@ -106,17 +106,19 @@ export async function runBenchmark(argv: string[]) {
     await buildFlowr(flowrPath, outputPath);
 
     // Run the benchmark
-    logger.info(`Running the benchmark with pointer analysis - ${currentISODate()}`);
-    const sensProc = forkAsync(benchmarkPath, sensArgs, logSensPath).then(() => {
-        logger.info(`Finished the benchmark with pointer analysis - ${currentISODate()}`);
+    logger.info(`Running the benchmark without pointer analysis - ${currentISODate()}`);
+    logger.verbose(`Insenstive benchmark args: ${insensArgs.join(" ")}`);
+    const insensProc = forkAsync(benchmarkPath, insensArgs, logInsensPath).then(() => {
+        logger.info(`Finished the benchmark without pointer analysis - ${currentISODate()}`);
     });
 
     // TODO: check whether this affects the benchmark results
-    // await sensProc;
+    await insensProc;
 
-    logger.info(`Running the benchmark without pointer analysis - ${currentISODate()}`);
-    const insensProc = forkAsync(benchmarkPath, insensArgs, logInsensPath).then(() => {
-        logger.info(`Finished the benchmark without pointer analysis - ${currentISODate()}`);
+    logger.info(`Running the benchmark with pointer analysis - ${currentISODate()}`);
+    logger.verbose(`Sensitive benchmark args: ${sensArgs.join(" ")}`);
+    const sensProc = forkAsync(benchmarkPath, sensArgs, logSensPath).then(() => {
+        logger.info(`Finished the benchmark with pointer analysis - ${currentISODate()}`);
     });
 
     await Promise.all([sensProc, insensProc]);

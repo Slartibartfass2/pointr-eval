@@ -42,10 +42,7 @@ export async function runDiscover(argv: string[]) {
     // Discover all files in the SSOC repo
     const files: [string, number][] = [];
     for await (const file of globIterate(`${ssocPath}/sources/**/*.[r|R]`, { absolute: true })) {
-        let normalizedFile = path.normalize(file);
-        if (path.sep === "\\") {
-            normalizedFile = normalizedFile.replace(/\\/g, "\\\\");
-        }
+        const normalizedFile = path.normalize(file);
         logger.silly(`Found file: ${normalizedFile}`);
         files.push([normalizedFile, fs.statSync(file).size]);
     }

@@ -7,7 +7,7 @@ Evaluation of the flowr pointer analysis.
 - `discover`: Recursively searches for all R files in the expected location of the ssoc-data repo.
 
 ```bash
-npm run discover -- -i <path-to-ssoc-data> -o <path-to-output>.json
+npm run discover -- -i <path-to-ssoc-data-repo> -o <path-to-output>.json
 ```
 
 - `benchmark`: Runs the flowr benchmark command on all passed R files with and without the pointer analysis.
@@ -28,8 +28,8 @@ npm run summarizer -- -i <path-to-results-directory> -f <path-to-flowr-repo>
 npm run eval -- -i <path-to-results-directory> -o <path-to-output-directory>
 ```
 
-- `full`: Runs the benchmark, summarizer, and eval commands in sequence.
+- `full`: Runs the discover, benchmark, summarizer, and eval commands in sequence.
 
 ```bash
-npm run full -- -i <path-to-discovered-files>.json -f <path-to-flowr-repo> -o <path-to-results-directory>
+npm run full -- -i <path-to-ssoc-data-repo> -f <path-to-flowr-repo> -o <path-to-results-directory>
 ```

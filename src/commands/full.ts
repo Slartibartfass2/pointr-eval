@@ -6,10 +6,11 @@ import { runEval } from "./evaluation";
 import path from "path";
 import { ensureDirectoryExists } from "../utils";
 import fs from "fs";
+import { runDiscover } from "./discover";
 
 export async function runFull(argv: string[]) {
     const runDefinitions: OptionDefinition[] = [
-        { name: "files-path", alias: "i", type: String },
+        { name: "ssoc-path", alias: "i", type: String },
         { name: "flowr-path", alias: "f", type: String },
         { name: "output-path", alias: "o", type: String, defaultValue: "./results" },
     ];
@@ -26,9 +27,12 @@ export async function runFull(argv: string[]) {
     fs.rmSync(outputPath, { recursive: true, force: true });
     fs.mkdirSync(outputPath);
 
+    const filesPath = path.join(outputPath, "files.json");
+    await runDiscover(["--ssoc-path", options["ssoc-path"], "--output-path", filesPath]);
+
     await runBenchmark([
         "--files-path",
-        options["files-path"],
+        filesPath,
         "--flowr-path",
         options["flowr-path"],
         "--output-path",
