@@ -11,7 +11,7 @@ import {
     forkAsync,
     getRepoInfo,
 } from "../utils";
-import { RepoInfo } from "../model";
+import { DiscoverData } from "../model";
 
 /**
  * Run the benchmark command.
@@ -69,10 +69,7 @@ export async function runBenchmark(argv: string[]) {
     const logInsensPath = path.join(outputPath, "bench-insens.log");
     fs.writeFileSync(logInsensPath, "");
 
-    const discoverData = JSON.parse(fs.readFileSync(filesPath, "utf8")) as {
-        repo: RepoInfo;
-        files: string[];
-    };
+    const discoverData = JSON.parse(fs.readFileSync(filesPath, "utf8")) as DiscoverData;
     logger.verbose(
         `Using discover data: repoInfo=${JSON.stringify(discoverData.repo)}, files=[${discoverData.files.length} R files]`,
     );

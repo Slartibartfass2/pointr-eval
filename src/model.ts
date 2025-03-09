@@ -318,3 +318,8 @@ export function repoInfoToLatex(repoInfo: RepoInfo, repoName: string): string {
 \\def\\${repo}Commit{${repoInfo.commit ?? ""}}
 \\def\\${repo}Branch{${repoInfo.branch ?? ""}}`;
 }
+
+export interface DiscoverData {
+    repo: RepoInfo;
+    files: string[];
+}

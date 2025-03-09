@@ -55,6 +55,7 @@ export async function execAsync(
 }
 
 export function forkAsync(modulePath: string, args: string[], logPath: string): Promise<void> {
+    logger.verbose(`Running module: '${modulePath}' in with args ${args}`);
     const child = fork(modulePath, args, { silent: true });
     return new Promise((resolve, reject) => {
         child.on("exit", (code, signal) => {

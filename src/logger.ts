@@ -9,7 +9,7 @@ export const logger = winston.createLogger({
         new winston.transports.Console({
             format: winston.format.combine(winston.format.colorize(), winston.format.cli()),
         }),
-        new winston.transports.File({ filename: "pointr-eval.log" }),
+        new winston.transports.File({ filename: "pointr-eval.log", level: "silly" }),
         new winston.transports.File({ filename: "error.log", level: "error" }),
     ],
 });

@@ -4,6 +4,7 @@ import { globIterate } from "glob";
 import fs from "fs";
 import path from "path";
 import { assertDirectory, ensureDirectoryExists, getRepoInfo } from "../utils";
+import { DiscoverData } from "../model";
 
 /**
  * Run the discover command.
@@ -38,31 +39,26 @@ export async function runDiscover(argv: string[]) {
     const repoInfo = await getRepoInfo(ssocPath);
     logger.verbose(`ssoc-data repo info: ${JSON.stringify(repoInfo)}`);
 
-    // Write discovered paths to the output file
-    fs.writeFileSync(outputPath, `{"repo":${JSON.stringify(repoInfo)},"files":[`);
-    let fileCount = 0;
+    // Discover all files in the SSOC repo
+    const files: [string, number][] = [];
     for await (const file of globIterate(`${ssocPath}/sources/**/*.[r|R]`, { absolute: true })) {
         let normalizedFile = path.normalize(file);
         if (path.sep === "\\") {
             normalizedFile = normalizedFile.replace(/\\/g, "\\\\");
         }
         logger.silly(`Found file: ${normalizedFile}`);
-        fs.appendFileSync(outputPath, `"${normalizedFile}",`);
-        fileCount++;
+        files.push([normalizedFile, fs.statSync(file).size]);
     }
-    if (fileCount > 0) {
-        // Remove trailing comma
-        fs.truncateSync(outputPath, fs.statSync(outputPath).size - 1);
-    }
-    fs.appendFileSync(outputPath, "]}");
+    const data: DiscoverData = {
+        repo: repoInfo,
+        // Sort by size in descending order
+        files: files.toSorted((a, b) => b[1] - a[1]).map((f) => f[0]),
+    };
+    fs.writeFileSync(outputPath, JSON.stringify(data));
 
     logger.info(
-        `Discovered ${fileCount} files in ${ssocPath} and wrote the paths to ${outputPath}`,
+        `Discovered ${files.length} files in ${ssocPath} and wrote the paths to ${outputPath}`,
     );
-
-    // Verify the output file
-    JSON.parse(fs.readFileSync(outputPath, "utf8"));
-    logger.verbose(`Verified the output file: ${outputPath}`);
 
     logEnd("discover");
 }
