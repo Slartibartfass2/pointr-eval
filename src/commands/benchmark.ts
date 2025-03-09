@@ -90,13 +90,19 @@ export async function runBenchmark(argv: string[]) {
     const benchmarkPath = path.join(flowrPath, "dist/src/cli/benchmark-app");
     const baseArgs = [
         // "--max-file-slices",
-        // "15",
+        //"4230", // 99% of the files have less than 4231 slices
         "--parser",
         "tree-sitter",
+        // "-l",
+        // "3300", // file limit
+        "-s",
+        "10", // slice sampling
+        "--per-file-time-limit",
+        `${20 * 60000}`, // 20 minute time limit
         "-i",
         benchFilesPath,
         "-r", // runs
-        "10",
+        "1",
         "-t", // threshold (default 75)
         "20",
     ];
