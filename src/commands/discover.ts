@@ -42,9 +42,11 @@ export async function runDiscover(argv: string[]) {
     // Discover all files in the SSOC repo
     const files: FileInfo[] = [];
     for await (const file of globIterate(`${ssocPath}/sources/**/*.[r|R]`, { absolute: true })) {
-        const normalizedFile = path.normalize(file);
-        // logger.silly(`Found file: ${normalizedFile}`);
-        files.push({ path: normalizedFile, size: fs.statSync(file).size });
+        const size = getSizeOfFile(file);
+        if (size === 0) {
+            logger.silly(`File ${file} has size 0.`);
+        }
+        files.push({ path: file, size });
     }
     const data: DiscoverData = {
         repo: repoInfo,
@@ -95,4 +97,48 @@ function equallyDistribute(files: FileInfo[]): FileInfo[] {
     }
 
     return buckets.flatMap((bucket) => bucket);
+}
+
+/**
+ * Get the size of the file and all files that are sourced in the file.
+ *
+ * This tries to estimate the effort required to analyze the file.
+ *
+ * @param filePath - The path of the file
+ * @param maxRecursion - The maximum recursion depth
+ * @returns The size of the file and all sourced files
+ */
+function getSizeOfFile(filePath: string, maxRecursion = 10): number {
+    if (maxRecursion <= 0) {
+        return 0;
+    }
+
+    if (!fs.existsSync(filePath)) {
+        return 0;
+    }
+
+    let size = fs.statSync(filePath).size;
+    const sourcePaths = extractSourcePaths(filePath);
+    for (const sourcePath of sourcePaths) {
+        const sourceFile = path.join(path.dirname(filePath), sourcePath);
+        size += getSizeOfFile(sourceFile, maxRecursion - 1);
+    }
+    return size;
+}
+
+/**
+ * R files may contain source() calls to other R files.
+ * This function extracts the paths of the source files from the given R file.
+ */
+function extractSourcePaths(filePath: string): string[] {
+    const fileContent = fs.readFileSync(filePath, "utf8");
+    const regex = /source\(["']([^"']+)["'],/g;
+    const matches = [];
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(fileContent)) !== null) {
+        matches.push(match[1]);
+    }
+
+    return matches;
 }
