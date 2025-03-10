@@ -41,11 +41,11 @@ export async function runEval(argv: string[]) {
 
     const sensResult = JSON.parse(
         fs.readFileSync(sensPath, "utf8"),
-        reviver,
+        statsReviver,
     ) as UltimateSlicerStats;
     const insensResult = JSON.parse(
         fs.readFileSync(insensPath, "utf8"),
-        reviver,
+        statsReviver,
     ) as UltimateSlicerStats;
 
     if (sensResult.totalRequests !== insensResult.totalRequests) {
@@ -58,7 +58,7 @@ export async function runEval(argv: string[]) {
     const evalStats = createUltimateEvalStats(insensResult, sensResult);
     fs.writeFileSync(
         path.join(resultsPath, "eval-stats.json"),
-        JSON.stringify(evalStats, replacer),
+        JSON.stringify(evalStats, statsReplacer),
     );
 
     printResults(evalStats);
@@ -94,14 +94,14 @@ export async function runEval(argv: string[]) {
     logEnd("eval");
 }
 
-function replacer<T>(key: string, value: T) {
+function statsReplacer<T>(key: string, value: T) {
     if (value instanceof Map) {
         return Array.from(value.entries());
     }
     return value;
 }
 
-function reviver<T>(key: string, value: T) {
+export function statsReviver<T>(key: string, value: T) {
     if ((key === "commonMeasurements" || key === "perSliceMeasurements") && Array.isArray(value)) {
         const map = new Map();
         for (const [k, v] of value) {

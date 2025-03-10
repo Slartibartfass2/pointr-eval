@@ -3,9 +3,12 @@ import { logEnd, logger, logStart } from "../logger";
 import fs from "fs";
 import path from "path";
 import { assertDirectory, buildFlowr, currentISODate, forkAsync, getRepoInfo } from "../utils";
-import { processSummarizedRunMeasurement } from "../flowr-logic";
-import { RepoInfo } from "../model";
+import { processSummarizedRunMeasurement, UltimateSlicerStats } from "../flowr-logic";
+import { capitalize, flattenObject, RepoInfo } from "../model";
 import assert from "assert";
+import { globIterate } from "glob";
+import readline from "readline";
+import { statsReviver } from "./evaluation";
 
 /**
  * Run the summarizer command.
@@ -103,7 +106,10 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
 
     logger.info("Summarizing runs per file");
     summarizeRunsPerFile(sensPath);
+    const sensCsv = writeSummariesToCsv(sensPath);
     summarizeRunsPerFile(insensPath);
+    const insensCsv = writeSummariesToCsv(insensPath);
+    await Promise.all([sensCsv, insensCsv]);
     logger.info("Finished summarizing runs per file");
 
     logEnd("summarizer");
@@ -131,4 +137,35 @@ function summarizeRunsPerFile(dir: string) {
             path.join(summaryPath, "summary-per-file.json"),
         );
     }
+}
+
+async function writeSummariesToCsv(basePath: string) {
+    const csvPath = path.join(basePath, "summary.csv");
+    const csvStream = fs.createWriteStream(csvPath);
+    let isInitialLine = true;
+    for await (const file of globIterate(`${basePath}/**/summary-per-file.json`, {
+        absolute: true,
+    })) {
+        const rl = readline.createInterface({
+            input: fs.createReadStream(file),
+            terminal: false,
+        });
+        for await (const line of rl) {
+            const summary = JSON.parse(line, statsReviver) as UltimateSlicerStats;
+            const flattenedData = flattenObject(summary).map(([key, value]) => ({
+                key: key.map(capitalize).join(""),
+                value,
+            }));
+            if (isInitialLine) {
+                csvStream.write(`file,${flattenedData.map((d) => d.key).join(",")}\n`);
+                isInitialLine = false;
+            }
+            const fileName = path
+                .relative(basePath, file)
+                .replace(`${path.sep}summary-per-file.json`, "");
+            csvStream.write(`${fileName},${flattenedData.map((d) => d.value).join(",")}\n`);
+        }
+    }
+    csvStream.end();
+    csvStream.close();
 }

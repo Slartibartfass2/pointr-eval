@@ -33,7 +33,7 @@ export interface SlicerStatsDataflow<T = number> {
     overwrittenIndices: T;
 }
 
-interface UltimateSlicerStats {
+export interface UltimateSlicerStats {
     totalRequests: number;
     totalSlices: number;
     commonMeasurements: Map<CommonSlicerMeasurements, SummarizedMeasurement>;

@@ -244,7 +244,7 @@ export function objectToLaTeX(obj: unknown): string {
         .join("\n");
 }
 
-function flattenObject(
+export function flattenObject(
     object: unknown,
     stopAtObject: (object: unknown) => boolean = () => false,
     previousKeys: string[] = [],
@@ -281,7 +281,7 @@ function formatKey(key: string, sep = " ", upper = false): string {
     );
 }
 
-function capitalize(text: string): string {
+export function capitalize(text: string): string {
     return text[0].toUpperCase() + text.slice(1);
 }
 
