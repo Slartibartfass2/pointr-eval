@@ -61,7 +61,7 @@ export function processSummarizedRunMeasurement(
     summarizedFiles: string[],
     appendPath: string,
 ) {
-    logger.verbose(`Summarizing all run statistics for file ${fileName}`);
+    logger.silly(`Summarizing all run statistics for file ${fileName}`);
 
     const summaries: SummarizedSlicerStats[] = [];
     for (const file of summarizedFiles) {
@@ -72,7 +72,7 @@ export function processSummarizedRunMeasurement(
         appendPath,
         `${JSON.stringify(summarizeAllSummarizedStats(summaries), jsonReplacer)}\n`,
     );
-    logger.verbose(`Appended summary of file ${fileName} to ${appendPath}`);
+    logger.silly(`Appended summary of file ${fileName} to ${appendPath}`);
 }
 
 export function processNextSummary(line: Buffer, allSummarized: SummarizedSlicerStats[]): void {

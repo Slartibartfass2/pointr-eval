@@ -84,7 +84,7 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
 
     // Run the summarizer
     logger.info(`Running the summarizer for result without pointer analysis - ${currentISODate()}`);
-    logger.verbose(`Insenstive summarizer args: ${insensArgs.join(" ")}`);
+    logger.verbose(`Insensitive summarizer args: ${insensArgs.join(" ")}`);
     const insensProc = forkAsync(summarizerPath, insensArgs, logInsensPath).then(() => {
         logger.info(
             `Finished the summarizer for result without pointer analysis - ${currentISODate()}`,
@@ -92,7 +92,7 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
     });
 
     logger.info(`Running the summarizer for result with pointer analysis - ${currentISODate()}`);
-    logger.verbose(`Senstive summarizer args: ${sensArgs.join(" ")}`);
+    logger.verbose(`Sensitive summarizer args: ${sensArgs.join(" ")}`);
     const sensProc = forkAsync(summarizerPath, sensArgs, logSensPath).then(() => {
         logger.info(
             `Finished the summarizer for result with pointer analysis - ${currentISODate()}`,
@@ -101,8 +101,10 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
 
     await Promise.all([sensProc, insensProc]);
 
+    logger.info("Summarizing runs per file");
     summarizeRunsPerFile(sensPath);
     summarizeRunsPerFile(insensPath);
+    logger.info("Finished summarizing runs per file");
 
     logEnd("summarizer");
 }

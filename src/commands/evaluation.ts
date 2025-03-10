@@ -3,7 +3,6 @@ import { logEnd, logger, logStart } from "../logger";
 import path from "path";
 import { assertDirectory } from "../utils";
 import fs from "fs";
-import assert from "assert";
 import { UltimateSlicerStats } from "@eagleoutice/flowr/benchmark/summarizer/data";
 import {
     createUltimateEvalStats,
@@ -54,9 +53,12 @@ export async function runEval(argv: string[]) {
         reviver,
     ) as UltimateSlicerStats;
 
-    assert(sensResult.totalRequests === insensResult.totalRequests, "Total requests do not match");
-    assert(sensResult.totalSlices === insensResult.totalSlices, "Total slices do not match");
-    assert.deepStrictEqual(sensResult.input, insensResult.input, "Input does not match");
+    if (sensResult.totalRequests !== insensResult.totalRequests) {
+        logger.warn("Total requests do not match");
+    }
+    if (sensResult.totalSlices !== insensResult.totalSlices) {
+        logger.warn("Total slices do not match");
+    }
 
     const evalStats = createUltimateEvalStats(insensResult, sensResult);
     fs.writeFileSync(

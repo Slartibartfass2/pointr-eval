@@ -113,7 +113,7 @@ export async function runBenchmark(argv: string[]) {
 
     // Run the benchmark
     logger.info(`Running the benchmark without pointer analysis - ${currentISODate()}`);
-    logger.verbose(`Insenstive benchmark args: ${insensArgs.join(" ")}`);
+    logger.verbose(`Insensitive benchmark args: ${insensArgs.join(" ")}`);
     const insensProc = forkAsync(benchmarkPath, insensArgs, logInsensPath).then(() => {
         logger.info(`Finished the benchmark without pointer analysis - ${currentISODate()}`);
     });
