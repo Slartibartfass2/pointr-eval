@@ -11,7 +11,7 @@ import {
     forkAsync,
     getRepoInfo,
 } from "../utils";
-import { DiscoverData } from "../model";
+import { DiscoverData, BenchConfig } from "../model";
 
 /**
  * Run the benchmark command.
@@ -88,6 +88,12 @@ export async function runBenchmark(argv: string[]) {
     fs.writeFileSync(path.join(outputPath, "repo-info.json"), JSON.stringify(repoInfos));
 
     const benchmarkPath = path.join(flowrPath, "dist/src/cli/benchmark-app");
+    const benchConfig: BenchConfig = {
+        sliceSampling: 15,
+        timeLimitInMinutes: 15,
+        runs: 3,
+        threshold: 20,
+    };
     const baseArgs = [
         // "--max-file-slices",
         //"4230", // 99% of the files have less than 4231 slices
@@ -96,18 +102,20 @@ export async function runBenchmark(argv: string[]) {
         // "-l",
         // "3300", // file limit
         "-s",
-        "10", // slice sampling
+        `${benchConfig.sliceSampling}`,
         "--per-file-time-limit",
-        `${20 * 60000}`, // 20 minute time limit
+        `${benchConfig.timeLimitInMinutes * 60000}`,
         "-i",
         benchFilesPath,
         "-r", // runs
-        "1",
+        `${benchConfig.runs}`,
         "-t", // threshold (default 75)
-        "20",
+        `${benchConfig.threshold}`,
     ];
     const sensArgs = [...baseArgs, "-o", sensPath, "--enable-pointer-tracking"];
     const insensArgs = [...baseArgs, "-o", insensPath];
+
+    fs.writeFileSync(path.join(outputPath, "bench-config.json"), JSON.stringify(benchConfig));
 
     await buildFlowr(flowrPath, outputPath);
 

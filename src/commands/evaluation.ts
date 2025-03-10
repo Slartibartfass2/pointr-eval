@@ -81,9 +81,14 @@ export async function runEval(argv: string[]) {
         insensErrors: errorsInsens,
     };
 
+    const benchConfig = JSON.parse(
+        fs.readFileSync(path.join(resultsPath, "bench-config.json"), "utf8"),
+    );
+
     let latex = objectToLaTeX(evalStats);
     latex += "\n" + objectToLaTeX(repoInfo);
     latex += "\n" + objectToLaTeX(errors);
+    latex += "\n" + objectToLaTeX({ benchConfig });
     fs.writeFileSync(path.join(resultsPath, "eval-stats.tex"), latex);
 
     logEnd("eval");

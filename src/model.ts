@@ -316,3 +316,14 @@ export interface DiscoverData {
     repo: RepoInfo;
     files: string[];
 }
+
+export interface BenchConfig {
+    /** How many slices per file are sampled */
+    sliceSampling: number;
+    /** Time limit per file in minutes */
+    timeLimitInMinutes: number;
+    /** Number of runs */
+    runs: number;
+    /** Threshold */
+    threshold: number;
+}
