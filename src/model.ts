@@ -238,8 +238,8 @@ function createEvalSlicerStatsDataflow(
     };
 }
 
-export function statsToLaTeX(stats: EvalUltimateSlicerStats): string {
-    return flattenObject(stats)
+export function objectToLaTeX(obj: unknown): string {
+    return flattenObject(obj)
         .map(([key, value]) => `\\def\\${key.map(capitalize).join("")}{${JSON.stringify(value)}}`)
         .join("\n");
 }
@@ -310,13 +310,6 @@ export interface RepoInfo {
     tag: string | undefined;
     commit: string | undefined;
     branch: string | undefined;
-}
-
-export function repoInfoToLatex(repoInfo: RepoInfo, repoName: string): string {
-    const repo = formatKey(repoName, "-", true);
-    return `\\def\\${repo}Tag{${repoInfo.tag ?? ""}}
-\\def\\${repo}Commit{${repoInfo.commit ?? ""}}
-\\def\\${repo}Branch{${repoInfo.branch ?? ""}}`;
 }
 
 export interface DiscoverData {
