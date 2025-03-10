@@ -40,16 +40,15 @@ export async function runDiscover(argv: string[]) {
     logger.verbose(`ssoc-data repo info: ${JSON.stringify(repoInfo)}`);
 
     // Discover all files in the SSOC repo
-    const files: [string, number][] = [];
+    const files: FileInfo[] = [];
     for await (const file of globIterate(`${ssocPath}/sources/**/*.[r|R]`, { absolute: true })) {
         const normalizedFile = path.normalize(file);
-        logger.silly(`Found file: ${normalizedFile}`);
-        files.push([normalizedFile, fs.statSync(file).size]);
+        // logger.silly(`Found file: ${normalizedFile}`);
+        files.push({ path: normalizedFile, size: fs.statSync(file).size });
     }
     const data: DiscoverData = {
         repo: repoInfo,
-        // Sort by size in descending order
-        files: files.toSorted((a, b) => b[1] - a[1]).map((f) => f[0]),
+        files: equallyDistribute(files).map((f) => f.path),
     };
     fs.writeFileSync(outputPath, JSON.stringify(data));
 
@@ -58,4 +57,42 @@ export async function runDiscover(argv: string[]) {
     );
 
     logEnd("discover");
+}
+
+interface FileInfo {
+    path: string;
+    size: number;
+}
+
+/**
+ * Equally distribute the files.
+ *
+ * Given a list of files, this function sorts the files by size in descending order and distributes them equally across 100 buckets.
+ * The files are then distributed in a zig-zag pattern across the buckets.
+ *
+ * @param files - The list of files to distribute
+ * @returns The equally distributed files (flattened buckets)
+ */
+function equallyDistribute(files: FileInfo[]): FileInfo[] {
+    // Sort the files by size in descending order
+    const sortedFiles = files.toSorted((a, b) => b.size - a.size);
+
+    // Create buckets for the files
+    const numberOfBuckets = 100;
+    const buckets: FileInfo[][] = [];
+    for (let i = 0; i < numberOfBuckets; i++) {
+        buckets.push([]);
+    }
+
+    // Distribute the files in a zig-zag pattern
+    for (let i = 0; i < sortedFiles.length; i++) {
+        const element = sortedFiles[i];
+        const dir = (i / (numberOfBuckets + 1)) % 2;
+        const bucketIndex =
+            dir === 0 ? i % numberOfBuckets : numberOfBuckets - 1 - (i % numberOfBuckets);
+
+        buckets[bucketIndex].push(element);
+    }
+
+    return buckets.flatMap((bucket) => bucket);
 }
