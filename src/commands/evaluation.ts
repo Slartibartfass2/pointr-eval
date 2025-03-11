@@ -113,35 +113,73 @@ export function statsReviver<T>(key: string, value: T) {
 }
 
 interface ErrorSummary<T = number> {
-    "time limit reached": T;
-    "out of memory": T;
-    "non r side": {
-        "no slices found": T;
-        "parse error": T;
-        "maximum call stack size exceeded": T;
-        "type error": T;
-        "range error": T;
-        "guard error": T;
-        "unknown error": T;
+    timeLimitReached: T;
+    outOfMemory: T;
+    nonRSide: {
+        guardError: {
+            noSlicesFound: T;
+            nodesToBeJoinedRequireSameExitPoints: T;
+            assignmentHasNoSource: T;
+            unknownError: T;
+            total: T;
+        };
+        parseError: {
+            unexpectedNodeType: T;
+            unknownError: T;
+            total: T;
+        };
+        typeError: {
+            cannotReadPropertiesOfUndefined: T;
+            unknownError: T;
+            total: T;
+        };
+        rangeError: {
+            maximumCallStackSizeExceeded: T;
+            invalidStringLength: T;
+            invalidArrayLength: T;
+            unknownError: T;
+            total: T;
+        };
+        unknownError: T;
+        total: T;
     };
-    "unknown error": T;
+    unknownError: T;
     total: T;
 }
 
 async function summarizeErrors(path: string): Promise<ErrorSummary<number>> {
     const errors: ErrorSummary<number> = {
-        "time limit reached": 0,
-        "out of memory": 0,
-        "non r side": {
-            "no slices found": 0,
-            "parse error": 0,
-            "maximum call stack size exceeded": 0,
-            "type error": 0,
-            "range error": 0,
-            "guard error": 0,
-            "unknown error": 0,
+        timeLimitReached: 0,
+        outOfMemory: 0,
+        nonRSide: {
+            guardError: {
+                noSlicesFound: 0,
+                nodesToBeJoinedRequireSameExitPoints: 0,
+                assignmentHasNoSource: 0,
+                unknownError: 0,
+                total: 0,
+            },
+            parseError: {
+                unexpectedNodeType: 0,
+                unknownError: 0,
+                total: 0,
+            },
+            typeError: {
+                cannotReadPropertiesOfUndefined: 0,
+                unknownError: 0,
+                total: 0,
+            },
+            rangeError: {
+                maximumCallStackSizeExceeded: 0,
+                invalidStringLength: 0,
+                invalidArrayLength: 0,
+                unknownError: 0,
+                total: 0,
+            },
+            unknownError: 0,
+            total: 0,
         },
-        "unknown error": 0,
+        unknownError: 0,
         total: 0,
     };
 
@@ -153,28 +191,53 @@ async function summarizeErrors(path: string): Promise<ErrorSummary<number>> {
     let actualTotal = 0;
     for await (const line of rl) {
         if (line.includes("Non R-Side error")) {
-            if (line.includes("No possible slices found")) {
-                errors["non r side"]["no slices found"]++;
+            if (line.includes("GuardError")) {
+                if (line.includes("No possible slices found")) {
+                    errors.nonRSide.guardError.noSlicesFound++;
+                } else if (line.includes("nodes to be joined must have same exist points")) {
+                    errors.nonRSide.guardError.nodesToBeJoinedRequireSameExitPoints++;
+                } else if (line.includes("has no source, impossible!")) {
+                    errors.nonRSide.guardError.assignmentHasNoSource++;
+                } else {
+                    errors.nonRSide.guardError.unknownError++;
+                }
+                errors.nonRSide.guardError.total++;
             } else if (line.includes("ParseError")) {
-                errors["non r side"]["parse error"]++;
-            } else if (line.includes("Maximum call stack size exceeded")) {
-                errors["non r side"]["maximum call stack size exceeded"]++;
+                if (line.includes("unexpected node type")) {
+                    errors.nonRSide.parseError.unexpectedNodeType++;
+                } else {
+                    errors.nonRSide.parseError.unknownError++;
+                }
+                errors.nonRSide.parseError.total++;
             } else if (line.includes("TypeError")) {
-                errors["non r side"]["type error"]++;
+                if (line.includes("Cannot read properties of undefined")) {
+                    errors.nonRSide.typeError.cannotReadPropertiesOfUndefined++;
+                } else {
+                    errors.nonRSide.typeError.unknownError++;
+                }
+                errors.nonRSide.typeError.total++;
             } else if (line.includes("RangeError")) {
-                errors["non r side"]["range error"]++;
-            } else if (line.includes("GuardError")) {
-                errors["non r side"]["guard error"]++;
+                if (line.includes("Maximum call stack size exceeded")) {
+                    errors.nonRSide.rangeError.maximumCallStackSizeExceeded++;
+                } else if (line.includes("Invalid string length")) {
+                    errors.nonRSide.rangeError.invalidStringLength++;
+                } else if (line.includes("Invalid array length")) {
+                    errors.nonRSide.rangeError.invalidArrayLength++;
+                } else {
+                    errors.nonRSide.rangeError.unknownError++;
+                }
+                errors.nonRSide.rangeError.total++;
             } else {
-                errors["non r side"]["unknown error"]++;
+                errors.nonRSide.unknownError++;
             }
+            errors.nonRSide.total++;
         } else if (
             line.includes("FATAL ERROR:") &&
             line.includes("JavaScript heap out of memory")
         ) {
-            errors["out of memory"]++;
+            errors.outOfMemory++;
         } else if (line.includes("Killing child process with")) {
-            errors["time limit reached"]++;
+            errors.timeLimitReached++;
         } else if (line.includes("files due to errors")) {
             const match = line.match(/(\d+) files due to errors/);
             if (match) {
@@ -183,18 +246,29 @@ async function summarizeErrors(path: string): Promise<ErrorSummary<number>> {
         }
     }
 
-    let total = 0;
-    for (const key in errors) {
-        if (key === "non r side") {
-            for (const subKey in errors[key]) {
-                total += errors[key][subKey];
-            }
-        } else {
-            total += errors[key];
-        }
-    }
-    errors["total"] = total;
-    errors["unknown error"] = actualTotal - total;
+    const total = sumErrorSums(errors);
+    errors.total = total;
+    errors.unknownError = actualTotal - total;
 
     return errors;
+}
+
+function sumErrorSums(obj: unknown): number {
+    let sum = 0;
+    for (const [key, value] of Object.entries(obj)) {
+        if (key === "unknownError" || key === "total") {
+            continue;
+        }
+
+        if (typeof value === "object") {
+            const subSum = sumErrorSums(value);
+            sum += subSum;
+            if ("total" in value && value["total"] !== subSum) {
+                logger.warn(`Sum of ${key} does not match total: ${subSum} !== ${value["total"]}`);
+            }
+        } else if (typeof value === "number") {
+            sum += value;
+        }
+    }
+    return sum;
 }
