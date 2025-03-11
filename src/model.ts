@@ -240,7 +240,7 @@ function createEvalSlicerStatsDataflow(
 
 export function objectToLaTeX(obj: unknown): string {
     return flattenObject(obj)
-        .map(([key, value]) => `\\def\\${key.map(capitalize).join("")}{${JSON.stringify(value)}}`)
+        .map(([key, value]) => `\\def\\${key.map(capitalize).join("")}{${value}}`)
         .join("\n");
 }
 
