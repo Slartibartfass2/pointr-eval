@@ -96,7 +96,7 @@ function equallyDistribute(files: FileInfo[]): FileInfo[] {
         buckets[bucketIndex].push(element);
     }
 
-    return buckets.flatMap((bucket) => bucket);
+    return buckets.flatMap((bucket) => bucket.toSorted((a, b) => Math.random() - 0.5));
 }
 
 /**
