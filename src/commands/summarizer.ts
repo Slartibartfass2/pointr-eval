@@ -2,9 +2,17 @@ import commandLineArgs, { OptionDefinition } from "command-line-args";
 import { logEnd, logger, logStart } from "../logger";
 import fs from "fs";
 import path from "path";
-import { assertDirectory, buildFlowr, currentISODate, forkAsync, getRepoInfo } from "../utils";
+import {
+    assertDirectory,
+    buildFlowr,
+    createRunTime,
+    currentISODate,
+    forkAsync,
+    getRepoInfo,
+    writeTime,
+} from "../utils";
 import { processSummarizedRunMeasurement, UltimateSlicerStats } from "../flowr-logic";
-import { capitalize, flattenObject, RepoInfo } from "../model";
+import { capitalize, flattenObject, RepoInfo, Times } from "../model";
 import assert from "assert";
 import { globIterate } from "glob";
 import readline from "readline";
@@ -26,6 +34,7 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
 
     logStart("summarizer");
+    const startTime = Date.now();
 
     const resultsPath = path.resolve(options["results-path"]);
     const flowrPathRaw = options["flowr-path"];
@@ -81,38 +90,62 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
     const sensArgs = [...baseArgs, "-i", sensBenchPath, "-o", sensPath];
     const insensArgs = [...baseArgs, "-i", insensBenchPath, "-o", insensPath];
 
+    let buildStart: number | undefined;
+    let buildEnd: number | undefined;
     if (!skipBuild) {
+        buildStart = Date.now();
         await buildFlowr(flowrPath, resultsPath);
+        buildEnd = Date.now();
     }
 
     // Run the summarizer
     logger.info(`Running the summarizer for result without pointer analysis - ${currentISODate()}`);
     logger.verbose(`Insensitive summarizer args: ${insensArgs.join(" ")}`);
+    const insensStart = Date.now();
+    let insensEnd: number;
     const insensProc = forkAsync(summarizerPath, insensArgs, logInsensPath).then(() => {
         logger.info(
             `Finished the summarizer for result without pointer analysis - ${currentISODate()}`,
         );
+        insensEnd = Date.now();
     });
 
     logger.info(`Running the summarizer for result with pointer analysis - ${currentISODate()}`);
     logger.verbose(`Sensitive summarizer args: ${sensArgs.join(" ")}`);
+    const sensStart = Date.now();
+    let sensEnd: number;
     const sensProc = forkAsync(summarizerPath, sensArgs, logSensPath).then(() => {
         logger.info(
             `Finished the summarizer for result with pointer analysis - ${currentISODate()}`,
         );
+        sensEnd = Date.now();
     });
 
     await Promise.all([sensProc, insensProc]);
 
     logger.info("Summarizing runs per file");
+    const perFileStart = Date.now();
     summarizeRunsPerFile(sensPath);
     const sensCsv = writeSummariesToCsv(sensPath);
     summarizeRunsPerFile(insensPath);
     const insensCsv = writeSummariesToCsv(insensPath);
     await Promise.all([sensCsv, insensCsv]);
+    const perFileEnd = Date.now();
     logger.info("Finished summarizing runs per file");
 
+    const endTime = Date.now();
     logEnd("summarizer");
+
+    const time: Partial<Times> = {
+        summarizer: {
+            ...createRunTime(startTime, endTime),
+            sens: createRunTime(sensStart, sensEnd),
+            insens: createRunTime(insensStart, insensEnd),
+            perFile: createRunTime(perFileStart, perFileEnd),
+        },
+        build: buildStart && buildEnd ? createRunTime(buildStart, buildEnd) : undefined,
+    };
+    writeTime(time, resultsPath);
 }
 
 function summarizeRunsPerFile(dir: string) {

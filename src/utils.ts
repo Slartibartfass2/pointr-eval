@@ -2,7 +2,8 @@ import fs from "fs";
 import { exec, fork } from "child_process";
 import { logger } from "./logger";
 import path from "path";
-import { RepoInfo } from "./model";
+import { capitalize, flattenObject, RepoInfo, RunTime, Times } from "./model";
+import formatDuration from "format-duration";
 
 /**
  * Execute a command asynchronously.
@@ -154,4 +155,41 @@ export async function getRepoInfo(path: string): Promise<RepoInfo> {
         commit: await getRepoCommit(path),
         branch: await getRepoBranch(path),
     };
+}
+
+export function writeTime(time: Partial<Times>, outputPath: string): void {
+    let times = {} as Times;
+    const timesPath = path.join(outputPath, "times.json");
+    if (fs.existsSync(timesPath)) {
+        times = JSON.parse(fs.readFileSync(timesPath, "utf8"));
+    }
+
+    // Only copy defined values from the partial object
+    Object.keys(time).forEach((key) => {
+        if (time[key] !== undefined) {
+            times[key] = time[key];
+        }
+    });
+
+    fs.writeFileSync(timesPath, JSON.stringify(times));
+}
+
+export function createRunTime(start: number, end: number): RunTime {
+    const durationInMs = end - start;
+    return {
+        start: new Date(start),
+        end: new Date(end),
+        durationInMs,
+        durationDisplay: formatDuration(durationInMs),
+    };
+}
+
+export function printTimes(times: Times): void {
+    const a = flattenObject(times)
+        .filter(([keys]) => keys.some((key) => key === "durationDisplay"))
+        .map(
+            ([key, value]) =>
+                [key.slice(0, -1).map(capitalize).join(""), value] as [string, unknown],
+        );
+    console.table(a);
 }

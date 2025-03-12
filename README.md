@@ -33,3 +33,9 @@ npm run eval -- -i <path-to-results-directory> -o <path-to-output-directory>
 ```bash
 npm run full -- -i <path-to-ssoc-data-repo> -f <path-to-flowr-repo> -o <path-to-results-directory>
 ```
+
+or with a pre-discovered file list:
+
+```bash
+npm run full -- --skip-discover -files-path <path-to-discovered-files>.json -f <path-to-flowr-repo> -o <path-to-results-directory>
+```

@@ -6,12 +6,14 @@ import {
     assertDirectory,
     assertFile,
     buildFlowr,
+    createRunTime,
     currentISODate,
     ensureDirectoryExists,
     forkAsync,
     getRepoInfo,
+    writeTime,
 } from "../utils";
-import { DiscoverData, BenchConfig } from "../model";
+import { DiscoverData, BenchConfig, Times } from "../model";
 
 /**
  * Run the benchmark command.
@@ -30,6 +32,7 @@ export async function runBenchmark(argv: string[]) {
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
 
     logStart("benchmark");
+    const startTime = Date.now();
 
     const filesPathRaw = options["files-path"];
     const flowrPathRaw = options["flowr-path"];
@@ -117,13 +120,18 @@ export async function runBenchmark(argv: string[]) {
 
     fs.writeFileSync(path.join(outputPath, "bench-config.json"), JSON.stringify(benchConfig));
 
+    const startTimeBuild = Date.now();
     await buildFlowr(flowrPath, outputPath);
+    const endTimeBuild = Date.now();
 
     // Run the benchmark
     logger.info(`Running the benchmark without pointer analysis - ${currentISODate()}`);
     logger.verbose(`Insensitive benchmark args: ${insensArgs.join(" ")}`);
+    const insensStart = Date.now();
+    let insensEnd: number;
     const insensProc = forkAsync(benchmarkPath, insensArgs, logInsensPath).then(() => {
         logger.info(`Finished the benchmark without pointer analysis - ${currentISODate()}`);
+        insensEnd = Date.now();
     });
 
     // TODO: check whether this affects the benchmark results
@@ -131,11 +139,25 @@ export async function runBenchmark(argv: string[]) {
 
     logger.info(`Running the benchmark with pointer analysis - ${currentISODate()}`);
     logger.verbose(`Sensitive benchmark args: ${sensArgs.join(" ")}`);
+    const sensStart = Date.now();
+    let sensEnd: number;
     const sensProc = forkAsync(benchmarkPath, sensArgs, logSensPath).then(() => {
         logger.info(`Finished the benchmark with pointer analysis - ${currentISODate()}`);
+        sensEnd = Date.now();
     });
 
     await Promise.all([sensProc, insensProc]);
 
+    const endTime = Date.now();
     logEnd("benchmark");
+
+    const time: Partial<Times> = {
+        benchmark: {
+            ...createRunTime(startTime, endTime),
+            insens: createRunTime(insensStart, insensEnd),
+            sens: createRunTime(sensStart, sensEnd),
+        },
+        build: createRunTime(startTimeBuild, endTimeBuild),
+    };
+    writeTime(time, outputPath);
 }

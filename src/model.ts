@@ -360,3 +360,26 @@ export interface BenchConfig {
     /** Threshold */
     threshold: number;
 }
+
+export interface RunTime {
+    start: Date;
+    end: Date;
+    durationInMs: number;
+    durationDisplay: string;
+}
+
+export interface Times {
+    full: RunTime;
+    build: RunTime;
+    discover: RunTime;
+    benchmark: RunTime & {
+        insens: RunTime;
+        sens: RunTime;
+    };
+    summarizer: RunTime & {
+        insens: RunTime;
+        sens: RunTime;
+        perFile: RunTime;
+    };
+    eval: RunTime;
+}

@@ -3,7 +3,13 @@ import { logEnd, logger, logStart } from "../logger";
 import { globIterate } from "glob";
 import fs from "fs";
 import path from "path";
-import { assertDirectory, ensureDirectoryExists, getRepoInfo } from "../utils";
+import {
+    assertDirectory,
+    createRunTime,
+    ensureDirectoryExists,
+    getRepoInfo,
+    writeTime,
+} from "../utils";
 import { DiscoverData } from "../model";
 
 /**
@@ -17,11 +23,13 @@ export async function runDiscover(argv: string[]) {
     const runDefinitions: OptionDefinition[] = [
         { name: "ssoc-path", alias: "i", type: String },
         { name: "output-path", alias: "o", type: String, defaultValue: "files.json" },
+        { name: "results-path", alias: "r", type: String },
     ];
     const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
 
     logStart("discover");
+    const startTime = Date.now();
 
     const ssocPath = options["ssoc-path"];
 
@@ -58,7 +66,12 @@ export async function runDiscover(argv: string[]) {
         `Discovered ${files.length} files in ${ssocPath} and wrote the paths to ${outputPath}`,
     );
 
+    const endTime = Date.now();
     logEnd("discover");
+
+    if (options["results-path"]) {
+        writeTime({ discover: createRunTime(startTime, endTime) }, options["results-path"]);
+    }
 }
 
 interface FileInfo {
@@ -96,7 +109,7 @@ function equallyDistribute(files: FileInfo[]): FileInfo[] {
         buckets[bucketIndex].push(element);
     }
 
-    return buckets.flatMap((bucket) => bucket.toSorted((a, b) => Math.random() - 0.5));
+    return buckets.flatMap((bucket) => bucket.toSorted(() => Math.random() - 0.5));
 }
 
 /**

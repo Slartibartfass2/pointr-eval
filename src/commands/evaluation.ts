@@ -1,7 +1,7 @@
 import commandLineArgs, { OptionDefinition } from "command-line-args";
 import { logEnd, logger, logStart } from "../logger";
 import path from "path";
-import { assertDirectory } from "../utils";
+import { assertDirectory, createRunTime, writeTime } from "../utils";
 import fs from "fs";
 import { UltimateSlicerStats } from "@eagleoutice/flowr/benchmark/summarizer/data";
 import {
@@ -28,6 +28,7 @@ export async function runEval(argv: string[]) {
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
 
     logStart("eval");
+    const startTime = Date.now();
 
     const resultsPathRaw = options["results-path"];
 
@@ -106,7 +107,10 @@ export async function runEval(argv: string[]) {
     });
     anyValueCheck(evalStats);
 
+    const endTime = Date.now();
     logEnd("eval");
+
+    writeTime({ eval: createRunTime(startTime, endTime) }, resultsPath);
 }
 
 function statsReplacer<T>(key: string, value: T) {
