@@ -4,7 +4,14 @@ import path from "path";
 import { assertDirectory } from "../utils";
 import fs from "fs";
 import { UltimateSlicerStats } from "@eagleoutice/flowr/benchmark/summarizer/data";
-import { createUltimateEvalStats, printResults, RepoInfo, objectToLaTeX } from "../model";
+import {
+    createUltimateEvalStats,
+    printResults,
+    RepoInfo,
+    objectToLaTeX,
+    EvalValues,
+    flattenObject,
+} from "../model";
 import readline from "readline";
 
 /**
@@ -83,6 +90,21 @@ export async function runEval(argv: string[]) {
     latex += "\n" + objectToLaTeX(errors);
     latex += "\n" + objectToLaTeX({ benchConfig });
     fs.writeFileSync(path.join(resultsPath, "eval-stats.tex"), latex);
+
+    // Sanity checks
+    Object.entries(evalStats.dataflow.overwrittenIndices).forEach(([key, value]) => {
+        if (value["diff"] < 0) {
+            logger.warn(`[SANITY CHECK] Overwritten indices diff for ${key} is negative`);
+        }
+        insensitiveValuePositiveCheck("Overwritten indices", key, value);
+    });
+    Object.entries(evalStats.dataflow.storedVertexIndices).forEach(([key, value]) => {
+        insensitiveValuePositiveCheck("Vertex indices", key, value);
+    });
+    Object.entries(evalStats.dataflow.storedEnvIndices).forEach(([key, value]) => {
+        insensitiveValuePositiveCheck("Env indices", key, value);
+    });
+    anyValueCheck(evalStats);
 
     logEnd("eval");
 }
@@ -264,4 +286,39 @@ function sumErrorSums(obj: unknown): number {
         }
     }
     return sum;
+}
+
+function insensitiveValuePositiveCheck(name: string, key: string, value: EvalValues) {
+    if (value.insensitiveValue > 0) {
+        logger.warn(`[SANITY CHECK] ${name} insensitive value for ${key} is positive`);
+    }
+}
+
+function anyValueCheck(obj: unknown) {
+    flattenObject(obj).forEach(([key, value]) => {
+        const name = key.join("-");
+        if (
+            [
+                ["overwrittenIndices"],
+                ["storedEnvIndices"],
+                ["storedVertexIndices"],
+                ["numberOfFunctionDefinitions-min"],
+                ["numberOfFunctionDefinitions-median"],
+                ["numberOfEdges", "diff"],
+                ["numberOfCalls", "diff"],
+                ["reduction", "diff"],
+                ["reduction", "min"],
+                ["dataflow", "min-diff"],
+                ["TimePerToken-raw-min"],
+            ].some((parts) => parts.every((part) => name.includes(part)))
+        ) {
+            return;
+        }
+
+        if (value === 0) {
+            logger.warn(`[SANITY CHECK] Value for ${name} is zero`);
+        } else if (key.includes("diff") && Number.isNaN(value)) {
+            logger.warn(`[SANITY CHECK] Diff for ${name} is NaN`);
+        }
+    });
 }

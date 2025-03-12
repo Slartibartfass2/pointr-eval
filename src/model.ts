@@ -12,7 +12,7 @@ import { SummarizedMeasurement } from "@eagleoutice/flowr/util/summarizer";
 import { asPercentage } from "./format";
 import { SlicerStatsDataflow } from "./flowr-logic";
 
-type EvalValues = {
+export type EvalValues = {
     insensitiveValue: number;
     sensitiveValue: number;
     diff: number;
