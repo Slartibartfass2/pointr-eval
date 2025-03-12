@@ -17,6 +17,7 @@ type EvalValues = {
     sensitiveValue: number;
     diff: number;
     diffRelative: number;
+    factor: number;
 };
 
 function isEvalValues(value: unknown): value is EvalValues {
@@ -41,8 +42,8 @@ type EvalSlicerStatsDataflow = SlicerStatsDataflow<EvalSummarizedMeasurement>;
 type EvalTimePerToken = TimePerToken<EvalSummarizedMeasurement>;
 
 export interface EvalUltimateSlicerStats {
-    totalRequests: Omit<Omit<EvalValues, "diffRelative">, "diff">;
-    totalSlices: Omit<Omit<EvalValues, "diffRelative">, "diff">;
+    totalRequests: Pick<EvalValues, "insensitiveValue" | "sensitiveValue">;
+    totalSlices: Pick<EvalValues, "insensitiveValue" | "sensitiveValue">;
     commonMeasurements: EvalMap<CommonSlicerMeasurements, EvalSummarizedMeasurement>;
     perSliceMeasurements: EvalMap<PerSliceMeasurements, EvalSummarizedMeasurement>;
     retrieveTimePerToken: EvalTimePerToken;
@@ -128,11 +129,13 @@ export function createUltimateEvalStats(
 }
 
 function getEvalValues(insensitiveValue: number, sensitiveValue: number): EvalValues {
+    const diff = sensitiveValue - insensitiveValue;
     return {
         insensitiveValue,
         sensitiveValue,
-        diff: sensitiveValue - insensitiveValue,
-        diffRelative: (sensitiveValue - insensitiveValue) / insensitiveValue,
+        diff,
+        diffRelative: diff / insensitiveValue,
+        factor: sensitiveValue / insensitiveValue,
     };
 }
 
