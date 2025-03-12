@@ -48,13 +48,6 @@ export async function runEval(argv: string[]) {
         statsReviver,
     ) as UltimateSlicerStats;
 
-    if (sensResult.totalRequests !== insensResult.totalRequests) {
-        logger.warn("Total requests do not match");
-    }
-    if (sensResult.totalSlices !== insensResult.totalSlices) {
-        logger.warn("Total slices do not match");
-    }
-
     const evalStats = createUltimateEvalStats(insensResult, sensResult);
     fs.writeFileSync(
         path.join(resultsPath, "eval-stats.json"),

@@ -41,8 +41,8 @@ type EvalSlicerStatsDataflow = SlicerStatsDataflow<EvalSummarizedMeasurement>;
 type EvalTimePerToken = TimePerToken<EvalSummarizedMeasurement>;
 
 export interface EvalUltimateSlicerStats {
-    totalRequests: number;
-    totalSlices: number;
+    totalRequests: Omit<Omit<EvalValues, "diffRelative">, "diff">;
+    totalSlices: Omit<Omit<EvalValues, "diffRelative">, "diff">;
     commonMeasurements: EvalMap<CommonSlicerMeasurements, EvalSummarizedMeasurement>;
     perSliceMeasurements: EvalMap<PerSliceMeasurements, EvalSummarizedMeasurement>;
     retrieveTimePerToken: EvalTimePerToken;
@@ -65,8 +65,14 @@ export function createUltimateEvalStats(
     sensResult: UltimateSlicerStats,
 ): EvalUltimateSlicerStats {
     return {
-        totalRequests: insensResult.totalRequests,
-        totalSlices: insensResult.totalSlices,
+        totalRequests: {
+            insensitiveValue: insensResult.totalRequests,
+            sensitiveValue: sensResult.totalRequests,
+        },
+        totalSlices: {
+            insensitiveValue: insensResult.totalSlices,
+            sensitiveValue: sensResult.totalSlices,
+        },
         commonMeasurements: createEvalMap(
             insensResult.commonMeasurements,
             sensResult.commonMeasurements,
