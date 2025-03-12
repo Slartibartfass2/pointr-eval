@@ -25,9 +25,9 @@ function isEvalValues(value: unknown): value is EvalValues {
         typeof value === "object" &&
         value !== null &&
         "insensitiveValue" in value &&
-        "sensitiveValue" in value &&
-        "diff" in value &&
-        "diffRelative" in value
+        "sensitiveValue" in value // &&
+        // "diff" in value &&
+        // "diffRelative" in value
     );
 }
 
@@ -211,6 +211,19 @@ function createEvalSlicerStatsDataflow(
     insensValue: SlicerStatsDataflow<SummarizedMeasurement>,
     sensValue: SlicerStatsDataflow<SummarizedMeasurement>,
 ): EvalSlicerStatsDataflow {
+    const storedVertexIndices = getEvalSummarizedMeasurement(
+        insensValue.storedVertexIndices,
+        sensValue.storedVertexIndices,
+    );
+    const storedEnvIndices = getEvalSummarizedMeasurement(
+        insensValue.storedEnvIndices,
+        sensValue.storedEnvIndices,
+    );
+    const overwrittenIndices = getEvalSummarizedMeasurement(
+        insensValue.overwrittenIndices,
+        sensValue.overwrittenIndices,
+    );
+
     return {
         numberOfNodes: getEvalSummarizedMeasurement(
             insensValue.numberOfNodes,
@@ -232,18 +245,29 @@ function createEvalSlicerStatsDataflow(
             insensValue.sizeOfObject,
             sensValue.sizeOfObject,
         ),
-        storedVertexIndices: getEvalSummarizedMeasurement(
-            insensValue.storedVertexIndices,
-            sensValue.storedVertexIndices,
-        ),
-        storedEnvIndices: getEvalSummarizedMeasurement(
-            insensValue.storedEnvIndices,
-            sensValue.storedEnvIndices,
-        ),
-        overwrittenIndices: getEvalSummarizedMeasurement(
-            insensValue.overwrittenIndices,
-            sensValue.overwrittenIndices,
-        ),
+        storedVertexIndices: onlyValues(storedVertexIndices),
+        storedEnvIndices: onlyValues(storedEnvIndices),
+        overwrittenIndices: onlyValues(overwrittenIndices),
+    };
+}
+
+function onlyValues(
+    summarized: EvalWrapper<SummarizedMeasurement>,
+): EvalWrapper<SummarizedMeasurement> {
+    function onlyVs(value: EvalValues): EvalValues {
+        return {
+            insensitiveValue: value.insensitiveValue,
+            sensitiveValue: value.sensitiveValue,
+        } as EvalValues;
+    }
+
+    return {
+        min: onlyVs(summarized.min),
+        max: onlyVs(summarized.max),
+        median: onlyVs(summarized.median),
+        total: onlyVs(summarized.total),
+        mean: onlyVs(summarized.mean),
+        std: onlyVs(summarized.std),
     };
 }
 
