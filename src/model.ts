@@ -359,6 +359,8 @@ export interface BenchConfig {
     runs: number;
     /** Threshold */
     threshold: number;
+    /** Sampling Strategy */
+    samplingStrategy: "random" | "equidistant";
 }
 
 export interface RunTime {

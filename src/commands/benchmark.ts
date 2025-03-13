@@ -96,6 +96,7 @@ export async function runBenchmark(argv: string[]) {
         timeLimitInMinutes: 15,
         runs: 3,
         threshold: 20,
+        samplingStrategy: "equidistant",
     };
     const baseArgs = [
         // "--max-file-slices",
@@ -106,6 +107,8 @@ export async function runBenchmark(argv: string[]) {
         // "3300", // file limit
         "-s",
         `${benchConfig.sliceSampling}`,
+        "--sampling-strategy",
+        benchConfig.samplingStrategy,
         "--per-file-time-limit",
         `${benchConfig.timeLimitInMinutes * 60000}`,
         "-i",

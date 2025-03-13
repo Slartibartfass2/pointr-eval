@@ -37,5 +37,5 @@ npm run full -- -i <path-to-ssoc-data-repo> -f <path-to-flowr-repo> -o <path-to-
 or with a pre-discovered file list:
 
 ```bash
-npm run full -- --skip-discover -files-path <path-to-discovered-files>.json -f <path-to-flowr-repo> -o <path-to-results-directory>
+npm run full -- --skip-discover --files-path <path-to-discovered-files>.json -f <path-to-flowr-repo> -o <path-to-results-directory>
 ```
