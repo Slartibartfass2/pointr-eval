@@ -7,10 +7,10 @@ import { UltimateSlicerStats } from "@eagleoutice/flowr/benchmark/summarizer/dat
 import {
     createUltimateEvalStats,
     printResults,
-    RepoInfo,
     objectToLaTeX,
     EvalValues,
     flattenObject,
+    RepoInfos,
 } from "../model";
 import readline from "readline";
 
@@ -66,7 +66,7 @@ export async function runEval(argv: string[]) {
 
     const repoInfo = JSON.parse(
         fs.readFileSync(path.join(resultsPath, "repo-info.json"), "utf8"),
-    ) as { flowr: RepoInfo; ssoc: RepoInfo };
+    ) as RepoInfos;
 
     // Analyze log files for errors
     const logSensPath = path.join(resultsPath, "bench-sens.log");

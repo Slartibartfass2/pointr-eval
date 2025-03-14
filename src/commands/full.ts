@@ -4,11 +4,11 @@ import { runBenchmark } from "./benchmark";
 import { runSummarizer } from "./summarizer";
 import { runEval } from "./evaluation";
 import path from "path";
-import { createRunTime, ensureDirectoryExists, printTimes, writeTime } from "../utils";
+import { createRunTime, ensureDirectoryExists, printTimes, reconstructObject, writeTime } from "../utils";
 import fs from "fs";
 import { runDiscover } from "./discover";
 import assert from "assert";
-import { Times } from "../model";
+import { flattenObject, objectToLaTeX, Times } from "../model";
 
 export async function runFull(argv: string[]) {
     const runDefinitions: OptionDefinition[] = [
@@ -79,4 +79,8 @@ export async function runFull(argv: string[]) {
 
     const times = JSON.parse(fs.readFileSync(path.join(outputPath, "times.json"), "utf8")) as Times;
     printTimes(times);
+
+    const filteredTimes = flattenObject(times).filter(([key]) => key.includes("durationInMs"));
+    const latex = "\n" + objectToLaTeX({ times: reconstructObject(filteredTimes) });
+    fs.appendFileSync(path.join(outputPath, "eval-stats.tex"), latex);
 }

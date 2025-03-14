@@ -13,7 +13,7 @@ import {
     getRepoInfo,
     writeTime,
 } from "../utils";
-import { DiscoverData, BenchConfig, Times } from "../model";
+import { DiscoverData, BenchConfig, Times, RepoInfos } from "../model";
 
 /**
  * Run the benchmark command.
@@ -84,9 +84,10 @@ export async function runBenchmark(argv: string[]) {
     // Write repo infos to output directory
     const flowrRepoInfo = await getRepoInfo(flowrPath);
     logger.verbose(`flowr repo info: ${JSON.stringify(flowrRepoInfo)}`);
-    const repoInfos = {
-        ssoc: discoverData.repo,
+    const repoInfos: RepoInfos = {
         flowr: flowrRepoInfo,
+        ssoc: discoverData.repo,
+        ssocFileCount: discoverData.files.length,
     };
     fs.writeFileSync(path.join(outputPath, "repo-info.json"), JSON.stringify(repoInfos));
 

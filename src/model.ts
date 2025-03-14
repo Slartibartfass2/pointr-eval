@@ -345,6 +345,12 @@ export interface RepoInfo {
     branch: string | undefined;
 }
 
+export interface RepoInfos {
+    flowr: RepoInfo;
+    ssoc: RepoInfo;
+    ssocFileCount: number;
+}
+
 export interface DiscoverData {
     repo: RepoInfo;
     files: string[];

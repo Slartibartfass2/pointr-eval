@@ -193,3 +193,21 @@ export function printTimes(times: Times): void {
         );
     console.table(a);
 }
+
+export function reconstructObject(entries: [string[], unknown][]) {
+    const result = {} as Record<string, unknown>;
+    entries.forEach(([keys, value]) => {
+        let current = result;
+        keys.forEach((key, index) => {
+            if (index === keys.length - 1) {
+                current[key] = value;
+            } else {
+                if (!current[key]) {
+                    current[key] = {};
+                }
+                current = current[key] as Record<string, unknown>;
+            }
+        });
+    });
+    return result;
+}
