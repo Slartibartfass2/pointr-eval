@@ -10,13 +10,14 @@ import {
     forkAsync,
     getRepoInfo,
     writeTime,
+    ensureDirectoryExists,
 } from "../utils";
 import { processSummarizedRunMeasurement, UltimateSlicerStats } from "../flowr-logic";
-import { capitalize, flattenObject, RepoInfo, Times } from "../model";
+import { capitalize, createUltimateEvalStats, flattenObject, RepoInfo, Times } from "../model";
 import assert from "assert";
 import { globIterate } from "glob";
 import readline from "readline";
-import { statsReviver } from "./evaluation";
+import { statsReviver, statsReplacer } from "./evaluation";
 
 /**
  * Run the summarizer command.
@@ -123,7 +124,7 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
 
     await Promise.all([sensProc, insensProc]);
 
-    logger.info("Summarizing runs per file");
+    logger.info(`Summarizing runs per file - ${currentISODate()}`);
     const perFileStart = Date.now();
     summarizeRunsPerFile(sensPath);
     const sensCsv = writeSummariesToCsv(sensPath);
@@ -131,7 +132,13 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
     const insensCsv = writeSummariesToCsv(insensPath);
     await Promise.all([sensCsv, insensCsv]);
     const perFileEnd = Date.now();
-    logger.info("Finished summarizing runs per file");
+    logger.info(`Finished summarizing runs per file - ${currentISODate()}`);
+
+    logger.info(`Comparing file-by-file - ${currentISODate()}`);
+    const compareFilesStart = Date.now();
+    await comparePerFile(resultsPath, insensPath, sensPath);
+    const compareFilesEnd = Date.now();
+    logger.info(`Finished comparing file-by-file - ${currentISODate()}`);
 
     const endTime = Date.now();
     logEnd("summarizer");
@@ -142,26 +149,35 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
             sens: createRunTime(sensStart, sensEnd),
             insens: createRunTime(insensStart, insensEnd),
             perFile: createRunTime(perFileStart, perFileEnd),
+            compareFiles: createRunTime(compareFilesStart, compareFilesEnd),
         },
         build: buildStart && buildEnd ? createRunTime(buildStart, buildEnd) : undefined,
     };
     writeTime(time, resultsPath);
 }
 
-function summarizeRunsPerFile(dir: string) {
+function iterateFilesInDir(dir: string, onFile: (dirPath: string, fileName: string) => void) {
     const dirEntries = fs.readdirSync(dir, { recursive: true, withFileTypes: true });
-    const runsPerFile = new Map<string, string[]>();
     for (const dir of dirEntries) {
         const fileName = dir.name;
         const dirPath = dir.parentPath;
 
-        if (dir.isFile() && fileName.endsWith(".json")) {
+        if (dir.isFile()) {
+            onFile(dirPath, fileName);
+        }
+    }
+}
+
+function summarizeRunsPerFile(dir: string) {
+    const runsPerFile = new Map<string, string[]>();
+    iterateFilesInDir(dir, (dirPath, fileName) => {
+        if (fileName.endsWith(".json")) {
             if (!runsPerFile.has(dirPath)) {
                 runsPerFile.set(dirPath, []);
             }
             runsPerFile.get(dirPath)?.push(path.join(dirPath, fileName));
         }
-    }
+    });
 
     for (const [summaryPath, runFiles] of runsPerFile) {
         processSummarizedRunMeasurement(
@@ -201,4 +217,48 @@ async function writeSummariesToCsv(basePath: string) {
     }
     csvStream.end();
     csvStream.close();
+}
+
+async function comparePerFile(basePath: string, insensPath: string, sensPath: string) {
+    const files = new Map<string, { insens?: string; sens?: string }>();
+    iterateFilesInDir(insensPath, (dirPath, fileName) => {
+        if (fileName === "summary-per-file.json") {
+            const dir = dirPath.replace(path.join(basePath, "insens", "summary"), "");
+            if (!files.has(dir)) {
+                files.set(dir, {});
+            }
+            files.get(dir)!.insens = path.join(dirPath, fileName);
+        }
+    });
+    iterateFilesInDir(sensPath, (dirPath, fileName) => {
+        if (fileName === "summary-per-file.json") {
+            const dir = dirPath.replace(path.join(basePath, "sens", "summary"), "");
+            if (!files.has(dir)) {
+                files.set(dir, {});
+            }
+            files.get(dir)!.sens = path.join(dirPath, fileName);
+        }
+    });
+
+    const promises = Array.from(files.entries()).map(async ([dir, paths]) => {
+        const { insens, sens } = paths;
+        if (!insens || !sens) {
+            return;
+        }
+    
+        const insensStats = JSON.parse(
+            await fs.promises.readFile(insens, "utf-8"),
+            statsReviver,
+        ) as UltimateSlicerStats;
+        const sensStats = JSON.parse(
+            await fs.promises.readFile(sens, "utf-8"),
+            statsReviver,
+        ) as UltimateSlicerStats;
+        const comparison = createUltimateEvalStats(insensStats, sensStats);
+
+        const outputPath = path.join(basePath, "compare", dir, "compare.json");
+        ensureDirectoryExists(outputPath);
+        await fs.promises.writeFile(outputPath, JSON.stringify(comparison, statsReplacer));
+    });
+    await Promise.all(promises);
 }

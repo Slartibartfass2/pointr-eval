@@ -389,6 +389,7 @@ export interface Times {
         insens: RunTime;
         sens: RunTime;
         perFile: RunTime;
+        compareFiles: RunTime;
     };
     eval: RunTime;
 }

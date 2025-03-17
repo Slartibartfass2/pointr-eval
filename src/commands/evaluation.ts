@@ -113,7 +113,7 @@ export async function runEval(argv: string[]) {
     writeTime({ eval: createRunTime(startTime, endTime) }, resultsPath);
 }
 
-function statsReplacer<T>(key: string, value: T) {
+export function statsReplacer<T>(key: string, value: T) {
     if (value instanceof Map) {
         return Array.from(value.entries());
     }
