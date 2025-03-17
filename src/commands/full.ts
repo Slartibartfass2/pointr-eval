@@ -4,7 +4,13 @@ import { runBenchmark } from "./benchmark";
 import { runSummarizer } from "./summarizer";
 import { runEval } from "./evaluation";
 import path from "path";
-import { createRunTime, ensureDirectoryExists, printTimes, reconstructObject, writeTime } from "../utils";
+import {
+    createRunTime,
+    ensureDirectoryExists,
+    printTimes,
+    reconstructObject,
+    writeTime,
+} from "../utils";
 import fs from "fs";
 import { runDiscover } from "./discover";
 import assert from "assert";

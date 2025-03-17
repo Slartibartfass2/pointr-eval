@@ -84,10 +84,13 @@ export async function runBenchmark(argv: string[]) {
     // Write repo infos to output directory
     const flowrRepoInfo = await getRepoInfo(flowrPath);
     logger.verbose(`flowr repo info: ${JSON.stringify(flowrRepoInfo)}`);
+    const pointrEvalInfo = await getRepoInfo(process.cwd());
+    logger.verbose(`pointr-eval repo info: ${JSON.stringify(pointrEvalInfo)}`);
     const repoInfos: RepoInfos = {
         flowr: flowrRepoInfo,
         ssoc: discoverData.repo,
         ssocFileCount: discoverData.files.length,
+        pointrEval: pointrEvalInfo,
     };
     fs.writeFileSync(path.join(outputPath, "repo-info.json"), JSON.stringify(repoInfos));
 

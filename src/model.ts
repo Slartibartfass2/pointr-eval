@@ -349,6 +349,7 @@ export interface RepoInfos {
     flowr: RepoInfo;
     ssoc: RepoInfo;
     ssocFileCount: number;
+    pointrEval: RepoInfo;
 }
 
 export interface DiscoverData {
