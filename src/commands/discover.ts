@@ -145,7 +145,7 @@ function getSizeOfFile(filePath: string, maxRecursion = 10): number {
  */
 function extractSourcePaths(filePath: string): string[] {
     const fileContent = fs.readFileSync(filePath, "utf8");
-    const regex = /source\(["']([^"']+)["'],/g;
+    const regex = /source\(["']([^"']+)["'],*/g;
     const matches = [];
     let match: RegExpExecArray | null;
 
