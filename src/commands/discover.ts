@@ -12,11 +12,12 @@ import {
 } from "../utils";
 import { DiscoverData, FileInfo, Size } from "../model";
 import { isBinaryFileSync } from "isbinaryfile";
+import seedrandom from "seedrandom";
 
 /**
  * Run the discover command.
  *
- * Expects a 'source' directory at the provided path.
+ * Expects a 'sources' directory at the provided path.
  * Discovers all files in the directory and its subdirectories.
  * Writes the paths of the discovered files to the output file.
  */
@@ -25,6 +26,7 @@ export async function runDiscover(argv: string[]) {
         { name: "ssoc-path", alias: "i", type: String },
         { name: "output-path", alias: "o", type: String, defaultValue: "files.json" },
         { name: "results-path", alias: "r", type: String },
+        { name: "seed", alias: "s", type: String, defaultValue: "pointr-eval" },
     ];
     const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
@@ -68,9 +70,10 @@ export async function runDiscover(argv: string[]) {
         // Add non-binary files with a size greater than 0
         files.push({ path: file, size });
     }
-    const distributedFiles = equallyDistribute(files);
+    const distributedFiles = equallyDistribute(files, options.seed);
     const data: DiscoverData = {
         repo: repoInfo,
+        seed: options.seed,
         files: distributedFiles,
         binaryFiles,
         emptyFiles,
@@ -81,8 +84,7 @@ export async function runDiscover(argv: string[]) {
         csvPath,
         "path,sourcedBytes,singleBytes,sourcedLines,singleLines\n" +
             distributedFiles
-                .sort((a, b) => a.size.sourcedBytes - b.size.sourcedBytes)
-                .slice(0, distributedFiles.length)
+                .sort(compareFiles)
                 .map(
                     ({ path, size }) =>
                         `"${path}",${size.sourcedBytes},${size.singleBytes},${size.sourcedLines},${size.singleLines}`,
@@ -111,9 +113,9 @@ export async function runDiscover(argv: string[]) {
  * @param files - The list of files to distribute
  * @returns The equally distributed files (flattened buckets)
  */
-function equallyDistribute(files: FileInfo[]): FileInfo[] {
+function equallyDistribute(files: FileInfo[], seed: string): FileInfo[] {
     // Sort the files by size in descending order
-    const sortedFiles = files.toSorted((a, b) => b.size.sourcedBytes - a.size.sourcedBytes);
+    const sortedFiles = files.toSorted(compareFiles);
 
     // Create buckets for the files
     const numberOfBuckets = 100;
@@ -132,7 +134,8 @@ function equallyDistribute(files: FileInfo[]): FileInfo[] {
         buckets[bucketIndex].push(element);
     }
 
-    return buckets.flatMap((bucket) => bucket.toSorted(() => Math.random() - 0.5));
+    const random = seedrandom(seed);
+    return buckets.flatMap((bucket) => bucket.toSorted(() => random() - 0.5));
 }
 
 /**
@@ -194,4 +197,17 @@ function extractSourcePaths(filePath: string): string[] {
     }
 
     return matches;
+}
+
+/**
+ * Sort the files by size in descending order.
+ *
+ * If the sizes are equal, the paths are compared to ensure a stable sort.
+ */
+function compareFiles(a: FileInfo, b: FileInfo) {
+    const compare = b.size.sourcedBytes - a.size.sourcedBytes;
+    if (compare === 0) {
+        return a.path.localeCompare(b.path);
+    }
+    return compare;
 }

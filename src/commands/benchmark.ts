@@ -92,6 +92,7 @@ export async function runBenchmark(argv: string[]) {
         ssocFileCount: discoverData.files.length,
         ssocBinaryFileCount: discoverData.binaryFiles.length,
         ssocEmptyFileCount: discoverData.emptyFiles.length,
+        discoverSeed: discoverData.seed,
         pointrEval: pointrEvalInfo,
     };
     fs.writeFileSync(path.join(outputPath, "repo-info.json"), JSON.stringify(repoInfos));

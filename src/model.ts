@@ -351,11 +351,13 @@ export interface RepoInfos {
     ssocFileCount: number;
     ssocBinaryFileCount: number;
     ssocEmptyFileCount: number;
+    discoverSeed: string;
     pointrEval: RepoInfo;
 }
 
 export interface DiscoverData {
     repo: RepoInfo;
+    seed: string;
     files: FileInfo[];
     binaryFiles: string[];
     emptyFiles: string[];

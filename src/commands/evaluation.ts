@@ -203,7 +203,7 @@ async function summarizeErrors(path: string): Promise<ErrorSummary<number>> {
     };
 
     const rl = readline.createInterface({
-        input: fs.createReadStream(path),
+        input: fs.createReadStream(path, "utf-8"),
         terminal: false,
     });
 

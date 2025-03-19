@@ -23,6 +23,7 @@ export async function runFull(argv: string[]) {
         { name: "output-path", alias: "o", type: String, defaultValue: "./results" },
         { name: "skip-discover", type: Boolean, defaultValue: false },
         { name: "files-path", type: String },
+        { name: "seed", alias: "s", type: String, defaultValue: "pointr-eval" },
     ];
     const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
@@ -54,6 +55,8 @@ export async function runFull(argv: string[]) {
             filesPath,
             "--results-path",
             outputPath,
+            "--seed",
+            options.seed,
         ]);
     }
 
