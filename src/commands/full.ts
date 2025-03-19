@@ -23,7 +23,8 @@ export async function runFull(argv: string[]) {
         { name: "output-path", alias: "o", type: String, defaultValue: "./results" },
         { name: "skip-discover", type: Boolean, defaultValue: false },
         { name: "files-path", type: String },
-        { name: "seed", alias: "s", type: String, defaultValue: "pointr-eval" },
+        { name: "seed", alias: "s", type: String, defaultValue: "U2xhcnRpYmFydGZhc3My" },
+        { name: "limit", alias: "l", type: String },
     ];
     const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
@@ -67,6 +68,7 @@ export async function runFull(argv: string[]) {
         options["flowr-path"],
         "--output-path",
         outputPath,
+        ...(options.limit ? ["--limit", options.limit] : []),
     ]);
 
     await runSummarizer(

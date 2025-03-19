@@ -27,6 +27,7 @@ export async function runBenchmark(argv: string[]) {
         { name: "files-path", alias: "i", type: String },
         { name: "flowr-path", alias: "f", type: String },
         { name: "output-path", alias: "o", type: String, defaultValue: "./results" },
+        { name: "limit", alias: "l", type: String },
     ];
     const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
@@ -79,7 +80,12 @@ export async function runBenchmark(argv: string[]) {
 
     // Write discover data to the output directory to have all at one place
     const benchFilesPath = path.join(outputPath, "bench-input.json");
-    fs.writeFileSync(benchFilesPath, JSON.stringify(discoverData.files.map((f) => f.path)));
+    const benchFiles = discoverData.files.slice(0, options.limit).map((f) => f.path);
+    fs.writeFileSync(benchFilesPath, JSON.stringify(benchFiles));
+
+    if (options.limit) {
+        logger.warn(`Limiting the number of files to ${options.limit}`);
+    }
 
     // Write repo infos to output directory
     const flowrRepoInfo = await getRepoInfo(flowrPath);

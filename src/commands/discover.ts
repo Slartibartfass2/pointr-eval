@@ -26,7 +26,7 @@ export async function runDiscover(argv: string[]) {
         { name: "ssoc-path", alias: "i", type: String },
         { name: "output-path", alias: "o", type: String, defaultValue: "files.json" },
         { name: "results-path", alias: "r", type: String },
-        { name: "seed", alias: "s", type: String, defaultValue: "pointr-eval" },
+        { name: "seed", alias: "s", type: String, defaultValue: "U2xhcnRpYmFydGZhc3My" },
     ];
     const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
