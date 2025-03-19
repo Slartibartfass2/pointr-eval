@@ -349,12 +349,28 @@ export interface RepoInfos {
     flowr: RepoInfo;
     ssoc: RepoInfo;
     ssocFileCount: number;
+    ssocBinaryFileCount: number;
+    ssocEmptyFileCount: number;
     pointrEval: RepoInfo;
 }
 
 export interface DiscoverData {
     repo: RepoInfo;
-    files: string[];
+    files: FileInfo[];
+    binaryFiles: string[];
+    emptyFiles: string[];
+}
+
+export interface Size {
+    sourcedBytes: number;
+    singleBytes: number;
+    sourcedLines: number;
+    singleLines: number;
+}
+
+export interface FileInfo {
+    path: string;
+    size: Size;
 }
 
 export interface BenchConfig {

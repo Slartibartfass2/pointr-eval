@@ -196,7 +196,7 @@ async function writeSummariesToCsv(basePath: string) {
         absolute: true,
     })) {
         const rl = readline.createInterface({
-            input: fs.createReadStream(file),
+            input: fs.createReadStream(file, "utf-8"),
             terminal: false,
         });
         for await (const line of rl) {
@@ -245,7 +245,7 @@ async function comparePerFile(basePath: string, insensPath: string, sensPath: st
         if (!insens || !sens) {
             return;
         }
-    
+
         const insensStats = JSON.parse(
             await fs.promises.readFile(insens, "utf-8"),
             statsReviver,

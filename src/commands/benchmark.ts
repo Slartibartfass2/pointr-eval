@@ -78,8 +78,8 @@ export async function runBenchmark(argv: string[]) {
     );
 
     // Write discover data to the output directory to have all at one place
-    const benchFilesPath = path.join(outputPath, "files.json");
-    fs.writeFileSync(benchFilesPath, JSON.stringify(discoverData.files));
+    const benchFilesPath = path.join(outputPath, "bench-input.json");
+    fs.writeFileSync(benchFilesPath, JSON.stringify(discoverData.files.map((f) => f.path)));
 
     // Write repo infos to output directory
     const flowrRepoInfo = await getRepoInfo(flowrPath);
@@ -90,6 +90,8 @@ export async function runBenchmark(argv: string[]) {
         flowr: flowrRepoInfo,
         ssoc: discoverData.repo,
         ssocFileCount: discoverData.files.length,
+        ssocBinaryFileCount: discoverData.binaryFiles.length,
+        ssocEmptyFileCount: discoverData.emptyFiles.length,
         pointrEval: pointrEvalInfo,
     };
     fs.writeFileSync(path.join(outputPath, "repo-info.json"), JSON.stringify(repoInfos));

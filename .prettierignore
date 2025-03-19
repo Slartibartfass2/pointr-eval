@@ -6,3 +6,6 @@ yarn.lock
 # Stored results
 results
 results-*
+
+# Python
+.venv/**

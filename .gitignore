@@ -146,3 +146,6 @@ dist
 # Stored results
 results
 results-*
+
+# Python
+.venv
