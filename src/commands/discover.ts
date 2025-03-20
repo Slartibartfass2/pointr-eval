@@ -54,6 +54,7 @@ export async function runDiscover(argv: string[]) {
     const files: FileInfo[] = [];
     const binaryFiles: string[] = [];
     const emptyFiles: string[] = [];
+    let numberOfSourcingFiles = 0;
     for await (const file of globIterate(`${ssocPath}/sources/**/*.[r|R]`, { absolute: true })) {
         if (isBinaryFileSync(file)) {
             binaryFiles.push(file);
@@ -67,6 +68,10 @@ export async function runDiscover(argv: string[]) {
             continue;
         }
 
+        if (size.sourcedBytes > size.singleBytes) {
+            numberOfSourcingFiles++;
+        }
+
         // Add non-binary files with a size greater than 0
         files.push({ path: file, size });
     }
@@ -77,6 +82,7 @@ export async function runDiscover(argv: string[]) {
         files: distributedFiles,
         binaryFiles,
         emptyFiles,
+        numberOfSourcingFiles,
     };
     fs.writeFileSync(outputPath, JSON.stringify(data));
     const csvPath = outputPath.replace(".json", ".csv");

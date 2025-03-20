@@ -351,6 +351,7 @@ export interface RepoInfos {
     ssocFileCount: number;
     ssocBinaryFileCount: number;
     ssocEmptyFileCount: number;
+    ssocNumberOfSourcingFiles: number;
     discoverSeed: string;
     pointrEval: RepoInfo;
 }
@@ -361,6 +362,7 @@ export interface DiscoverData {
     files: FileInfo[];
     binaryFiles: string[];
     emptyFiles: string[];
+    numberOfSourcingFiles: number;
 }
 
 export interface Size {
