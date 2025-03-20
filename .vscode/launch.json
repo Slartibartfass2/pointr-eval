@@ -8,10 +8,14 @@
             "type": "node",
             "request": "launch",
             "name": "Launch Program",
-            "skipFiles": ["node_modules/**"],
+            "skipFiles": ["node_modules/**", "results/**"],
             "program": "${workspaceFolder}/src/index.ts",
             "preLaunchTask": "npm: build",
-            "outFiles": ["${workspaceFolder}/**/*.(m|c|)js", "!**/node_modules/**"]
+            "outFiles": [
+                "${workspaceFolder}/**/*.(m|c|)js",
+                "!**/node_modules/**",
+                "!${workspaceFolder}/results/**"
+            ]
         },
         {
             "type": "node",

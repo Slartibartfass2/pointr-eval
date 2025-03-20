@@ -14,6 +14,8 @@ import {
     readUltimateStats,
     writeUltimateStats,
     statsReviver,
+    iterateFilesInDir,
+    onFilesInBothPaths,
 } from "../utils";
 import { processSummarizedRunMeasurement, UltimateSlicerStats } from "../flowr-logic";
 import { capitalize, createUltimateEvalStats, flattenObject, RepoInfo, Times } from "../model";
@@ -158,18 +160,6 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
     writeTime(time, resultsPath);
 }
 
-function iterateFilesInDir(dir: string, onFile: (dirPath: string, fileName: string) => void) {
-    const dirEntries = fs.readdirSync(dir, { recursive: true, withFileTypes: true });
-    for (const dir of dirEntries) {
-        const fileName = dir.name;
-        const dirPath = dir.parentPath;
-
-        if (dir.isFile()) {
-            onFile(dirPath, fileName);
-        }
-    }
-}
-
 function summarizeRunsPerFile(dir: string) {
     const runsPerFile = new Map<string, string[]>();
     iterateFilesInDir(dir, (dirPath, fileName) => {
@@ -222,44 +212,20 @@ async function writeSummariesToCsv(basePath: string) {
 }
 
 function comparePerFile(basePath: string, insensPath: string, sensPath: string) {
-    const files = new Map<string, { insens?: string; sens?: string }>();
-    iterateFilesInDir(insensPath, (dirPath, fileName) => {
-        if (fileName === "summary-per-file.json") {
-            const dir = dirPath.replace(path.join(basePath, "insens", "summary"), "");
-            if (!files.has(dir)) {
-                files.set(dir, {});
-            }
-            files.get(dir)!.insens = path.join(dirPath, fileName);
-        }
-    });
-    iterateFilesInDir(sensPath, (dirPath, fileName) => {
-        if (fileName === "summary-per-file.json") {
-            const dir = dirPath.replace(path.join(basePath, "sens", "summary"), "");
-            if (!files.has(dir)) {
-                files.set(dir, {});
-            }
-            files.get(dir)!.sens = path.join(dirPath, fileName);
-        }
-    });
+    const { both, single } = onFilesInBothPaths(
+        insensPath,
+        sensPath,
+        (fileName) => fileName === "summary-per-file.json",
+        (dir, insensPath, sensPath) => {
+            const insensStats = readUltimateStats(insensPath);
+            const sensStats = readUltimateStats(sensPath);
+            const comparison = createUltimateEvalStats(insensStats, sensStats);
 
-    logger.verbose(`Found ${files.size} per-file summaries`);
-
-    let uncomparable = 0;
-    for (const [dir, paths] of files.entries()) {
-        const { insens, sens } = paths;
-        if (!insens || !sens) {
-            uncomparable++;
-            continue;
-        }
-
-        const insensStats = readUltimateStats(insens);
-        const sensStats = readUltimateStats(sens);
-        const comparison = createUltimateEvalStats(insensStats, sensStats);
-
-        const outputPath = path.join(basePath, "compare", dir, "compare.json");
-        ensureDirectoryExists(outputPath);
-        writeUltimateStats(comparison, outputPath);
-    }
-
-    logger.info(`Uncomparable files: ${uncomparable} / ${files.size}`);
+            const outputPath = path.join(basePath, "compare", dir, "compare.json");
+            ensureDirectoryExists(outputPath);
+            writeUltimateStats(comparison, outputPath);
+        },
+        "onFilesInBothPaths",
+    );
+    logger.info(`Compared ${both}/${both + single} files`);
 }

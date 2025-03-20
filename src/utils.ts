@@ -248,3 +248,67 @@ function statsReplacer<T>(key: string, value: T) {
     }
     return value;
 }
+
+export function iterateFilesInDir(
+    dir: string,
+    onFile: (dirPath: string, fileName: string) => void,
+) {
+    const dirEntries = fs.readdirSync(dir, { recursive: true, withFileTypes: true });
+    for (const dir of dirEntries) {
+        const fileName = dir.name;
+        const dirPath = dir.parentPath;
+
+        if (dir.isFile()) {
+            onFile(dirPath, fileName);
+        }
+    }
+}
+
+export function onFilesInBothPaths(
+    insensPath: string,
+    sensPath: string,
+    fileFilter: (fileName: string) => boolean,
+    onFile: (dir: string, insensPath?: string, sensPath?: string) => void,
+    mode: "onFilesInBothPaths" | "onFilesInSinglePath",
+): { both: number; single: number } {
+    const files = new Map<string, { insens?: string; sens?: string }>();
+    iterateFilesInDir(insensPath, (dirPath, fileName) => {
+        if (fileFilter(fileName)) {
+            const dir = path.join(dirPath.replace(insensPath, ""), fileName);
+            if (!files.has(dir)) {
+                files.set(dir, {});
+            }
+            files.get(dir)!.insens = path.join(dirPath, fileName);
+        }
+    });
+
+    iterateFilesInDir(sensPath, (dirPath, fileName) => {
+        if (fileFilter(fileName)) {
+            const dir = path.join(dirPath.replace(sensPath, ""), fileName);
+            if (!files.has(dir)) {
+                files.set(dir, {});
+            }
+            files.get(dir)!.sens = path.join(dirPath, fileName);
+        }
+    });
+
+    let single = 0;
+    for (const [dir, paths] of files.entries()) {
+        const { insens, sens } = paths;
+
+        const isSingle = (insens && !sens) || (!insens && sens);
+        if (isSingle) {
+            single++;
+            if (mode === "onFilesInBothPaths") {
+                continue;
+            }
+        } else if (mode === "onFilesInSinglePath") {
+            continue;
+        }
+
+        const dirPath = path.dirname(dir);
+        onFile(dirPath, insens, sens);
+    }
+
+    return { both: files.size - single, single: single };
+}

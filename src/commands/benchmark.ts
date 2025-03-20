@@ -11,6 +11,7 @@ import {
     ensureDirectoryExists,
     forkAsync,
     getRepoInfo,
+    onFilesInBothPaths,
     writeTime,
 } from "../utils";
 import { DiscoverData, BenchConfig, Times, RepoInfos } from "../model";
@@ -165,6 +166,11 @@ export async function runBenchmark(argv: string[]) {
 
     await Promise.all([sensProc, insensProc]);
 
+    // Delete results which aren't in both results
+    logger.info(`Removing results which are not in both runs - ${currentISODate()}`);
+    removeSingleFiles(insensPath, sensPath);
+    logger.info(`Finished removing results which are not in both runs - ${currentISODate()}`);
+
     const endTime = Date.now();
     logEnd("benchmark");
 
@@ -177,4 +183,28 @@ export async function runBenchmark(argv: string[]) {
         build: createRunTime(startTimeBuild, endTimeBuild),
     };
     writeTime(time, outputPath);
+}
+
+function removeSingleFiles(insensPath: string, sensPath: string) {
+    let insensRemoved = 0;
+    let sensRemoved = 0;
+    const { single } = onFilesInBothPaths(
+        insensPath,
+        sensPath,
+        (fileName) => fileName.endsWith(".json"),
+        (_, insensPath, sensPath) => {
+            if (insensPath) {
+                insensRemoved++;
+                fs.rmSync(insensPath);
+            }
+            if (sensPath) {
+                sensRemoved++;
+                fs.rmSync(sensPath);
+            }
+        },
+        "onFilesInSinglePath",
+    );
+    logger.verbose(
+        `Removed ${single} results which are not in both runs (insens: ${insensRemoved}, sens: ${sensRemoved})`,
+    );
 }
