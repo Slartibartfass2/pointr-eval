@@ -2,8 +2,16 @@ import fs from "fs";
 import { exec, fork } from "child_process";
 import { logger } from "./logger";
 import path from "path";
-import { capitalize, flattenObject, RepoInfo, RunTime, Times } from "./model";
+import {
+    capitalize,
+    flattenObject,
+    RepoInfo,
+    RunTime,
+    Times,
+    EvalUltimateSlicerStats,
+} from "./model";
 import formatDuration from "format-duration";
+import { UltimateSlicerStats } from "@eagleoutice/flowr/benchmark/summarizer/data";
 
 /**
  * Execute a command asynchronously.
@@ -210,4 +218,33 @@ export function reconstructObject(entries: [string[], unknown][]) {
         });
     });
     return result;
+}
+
+export function readUltimateStats(path: string): UltimateSlicerStats {
+    return JSON.parse(fs.readFileSync(path, "utf-8"), statsReviver) as UltimateSlicerStats;
+}
+
+export function statsReviver<T>(key: string, value: T) {
+    if ((key === "commonMeasurements" || key === "perSliceMeasurements") && Array.isArray(value)) {
+        const map = new Map();
+        for (const [k, v] of value) {
+            map.set(k, v);
+        }
+        return map;
+    }
+    return value;
+}
+
+export function writeUltimateStats(
+    stats: UltimateSlicerStats | EvalUltimateSlicerStats,
+    path: string,
+): void {
+    fs.writeFileSync(path, JSON.stringify(stats, statsReplacer));
+}
+
+function statsReplacer<T>(key: string, value: T) {
+    if (value instanceof Map) {
+        return Array.from(value.entries());
+    }
+    return value;
 }

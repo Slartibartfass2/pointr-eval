@@ -1,9 +1,14 @@
 import commandLineArgs, { OptionDefinition } from "command-line-args";
 import { logEnd, logger, logStart } from "../logger";
 import path from "path";
-import { assertDirectory, createRunTime, writeTime } from "../utils";
+import {
+    assertDirectory,
+    createRunTime,
+    writeTime,
+    readUltimateStats,
+    writeUltimateStats,
+} from "../utils";
 import fs from "fs";
-import { UltimateSlicerStats } from "@eagleoutice/flowr/benchmark/summarizer/data";
 import {
     createUltimateEvalStats,
     printResults,
@@ -49,20 +54,11 @@ export async function runEval(argv: string[]) {
 
     logger.info(`Comparing the summaries in ${sensPath} and ${insensPath}`);
 
-    const sensResult = JSON.parse(
-        fs.readFileSync(sensPath, "utf8"),
-        statsReviver,
-    ) as UltimateSlicerStats;
-    const insensResult = JSON.parse(
-        fs.readFileSync(insensPath, "utf8"),
-        statsReviver,
-    ) as UltimateSlicerStats;
+    const sensResult = readUltimateStats(sensPath);
+    const insensResult = readUltimateStats(insensPath);
 
     const evalStats = createUltimateEvalStats(insensResult, sensResult);
-    fs.writeFileSync(
-        path.join(resultsPath, "eval-stats.json"),
-        JSON.stringify(evalStats, statsReplacer),
-    );
+    writeUltimateStats(evalStats, path.join(resultsPath, "eval-stats.json"));
 
     printResults(evalStats);
 
@@ -128,24 +124,6 @@ export async function runEval(argv: string[]) {
     logEnd("eval");
 
     writeTime({ eval: createRunTime(startTime, endTime) }, resultsPath);
-}
-
-export function statsReplacer<T>(key: string, value: T) {
-    if (value instanceof Map) {
-        return Array.from(value.entries());
-    }
-    return value;
-}
-
-export function statsReviver<T>(key: string, value: T) {
-    if ((key === "commonMeasurements" || key === "perSliceMeasurements") && Array.isArray(value)) {
-        const map = new Map();
-        for (const [k, v] of value) {
-            map.set(k, v);
-        }
-        return map;
-    }
-    return value;
 }
 
 interface ErrorSummary<T = number> {

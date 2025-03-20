@@ -11,13 +11,15 @@ import {
     getRepoInfo,
     writeTime,
     ensureDirectoryExists,
+    readUltimateStats,
+    writeUltimateStats,
+    statsReviver,
 } from "../utils";
 import { processSummarizedRunMeasurement, UltimateSlicerStats } from "../flowr-logic";
 import { capitalize, createUltimateEvalStats, flattenObject, RepoInfo, Times } from "../model";
 import assert from "assert";
 import { globIterate } from "glob";
 import readline from "readline";
-import { statsReviver, statsReplacer } from "./evaluation";
 
 /**
  * Run the summarizer command.
@@ -136,7 +138,7 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
 
     logger.info(`Comparing file-by-file - ${currentISODate()}`);
     const compareFilesStart = Date.now();
-    await comparePerFile(resultsPath, insensPath, sensPath);
+    comparePerFile(resultsPath, insensPath, sensPath);
     const compareFilesEnd = Date.now();
     logger.info(`Finished comparing file-by-file - ${currentISODate()}`);
 
@@ -219,7 +221,7 @@ async function writeSummariesToCsv(basePath: string) {
     csvStream.close();
 }
 
-async function comparePerFile(basePath: string, insensPath: string, sensPath: string) {
+function comparePerFile(basePath: string, insensPath: string, sensPath: string) {
     const files = new Map<string, { insens?: string; sens?: string }>();
     iterateFilesInDir(insensPath, (dirPath, fileName) => {
         if (fileName === "summary-per-file.json") {
@@ -240,25 +242,24 @@ async function comparePerFile(basePath: string, insensPath: string, sensPath: st
         }
     });
 
-    const promises = Array.from(files.entries()).map(async ([dir, paths]) => {
+    logger.verbose(`Found ${files.size} per-file summaries`);
+
+    let uncomparable = 0;
+    for (const [dir, paths] of files.entries()) {
         const { insens, sens } = paths;
         if (!insens || !sens) {
-            return;
+            uncomparable++;
+            continue;
         }
 
-        const insensStats = JSON.parse(
-            await fs.promises.readFile(insens, "utf-8"),
-            statsReviver,
-        ) as UltimateSlicerStats;
-        const sensStats = JSON.parse(
-            await fs.promises.readFile(sens, "utf-8"),
-            statsReviver,
-        ) as UltimateSlicerStats;
+        const insensStats = readUltimateStats(insens);
+        const sensStats = readUltimateStats(sens);
         const comparison = createUltimateEvalStats(insensStats, sensStats);
 
         const outputPath = path.join(basePath, "compare", dir, "compare.json");
         ensureDirectoryExists(outputPath);
-        await fs.promises.writeFile(outputPath, JSON.stringify(comparison, statsReplacer));
-    });
-    await Promise.all(promises);
+        writeUltimateStats(comparison, outputPath);
+    }
+
+    logger.info(`Uncomparable files: ${uncomparable} / ${files.size}`);
 }
