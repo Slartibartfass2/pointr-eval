@@ -413,3 +413,12 @@ export interface Times {
     };
     eval: RunTime;
 }
+
+export interface SystemInfo {
+    cpu: string;
+    cores: number;
+    memory: string;
+    os: string;
+    node: string;
+    npm: string;
+}

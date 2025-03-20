@@ -11,8 +11,10 @@ import {
     EvalValues,
     flattenObject,
     RepoInfos,
+    SystemInfo,
 } from "../model";
 import readline from "readline";
+import sysinfo from "systeminformation";
 
 /**
  * Run the evaluation command.
@@ -86,10 +88,25 @@ export async function runEval(argv: string[]) {
         fs.readFileSync(path.join(resultsPath, "bench-config.json"), "utf8"),
     );
 
+    // Output system information
+    const cpuInfo = await sysinfo.cpu();
+    const memInfo = await sysinfo.mem();
+    const osInfo = await sysinfo.osInfo();
+    const versions = await sysinfo.versions();
+    const sysInfo: SystemInfo = {
+        cpu: `${cpuInfo.manufacturer} ${cpuInfo.brand} (${cpuInfo.speed} GHz)`,
+        cores: cpuInfo.cores,
+        memory: (memInfo.total / 1024 / 1024 / 1024).toFixed(2),
+        os: `${osInfo.distro} ${osInfo.release}`,
+        node: versions.node,
+        npm: versions.npm,
+    };
+
     let latex = objectToLaTeX(evalStats);
     latex += "\n" + objectToLaTeX(repoInfo);
     latex += "\n" + objectToLaTeX(errors);
     latex += "\n" + objectToLaTeX({ benchConfig });
+    latex += "\n" + objectToLaTeX({ system: sysInfo });
     fs.writeFileSync(path.join(resultsPath, "eval-stats.tex"), latex);
 
     // Sanity checks
