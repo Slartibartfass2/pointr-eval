@@ -99,6 +99,7 @@ export async function runBenchmark(argv: string[]) {
         ssocFileCount: discoverData.files.length,
         ssocBinaryFileCount: discoverData.binaryFiles.length,
         ssocEmptyFileCount: discoverData.emptyFiles.length,
+        ssocNonCodeFileCount: discoverData.nonCodeFiles.length,
         ssocNumberOfSourcingFiles: discoverData.numberOfSourcingFiles,
         discoverSeed: discoverData.seed,
         pointrEval: pointrEvalInfo,

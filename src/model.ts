@@ -351,6 +351,7 @@ export interface RepoInfos {
     ssocFileCount: number;
     ssocBinaryFileCount: number;
     ssocEmptyFileCount: number;
+    ssocNonCodeFileCount: number;
     ssocNumberOfSourcingFiles: number;
     discoverSeed: string;
     pointrEval: RepoInfo;
@@ -362,14 +363,24 @@ export interface DiscoverData {
     files: FileInfo[];
     binaryFiles: string[];
     emptyFiles: string[];
+    nonCodeFiles: string[];
     numberOfSourcingFiles: number;
 }
 
+/**
+ * non empty lines are lines that contain at least one character
+ * code lines are lines that don't have '#' as the first character (ignoring leading whitespace)
+ */
+export interface FileSize {
+    bytes: number;
+    lines: number;
+    nonEmptyLines: number;
+    codeLines: number;
+}
+
 export interface Size {
-    sourcedBytes: number;
-    singleBytes: number;
-    sourcedLines: number;
-    singleLines: number;
+    sourced: FileSize;
+    single: FileSize;
 }
 
 export interface FileInfo {

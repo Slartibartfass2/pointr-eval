@@ -10,7 +10,7 @@ import {
     getRepoInfo,
     writeTime,
 } from "../utils";
-import { DiscoverData, FileInfo, Size } from "../model";
+import { DiscoverData, FileInfo, FileSize, Size } from "../model";
 import { isBinaryFileSync } from "isbinaryfile";
 import seedrandom from "seedrandom";
 
@@ -54,25 +54,36 @@ export async function runDiscover(argv: string[]) {
     const files: FileInfo[] = [];
     const binaryFiles: string[] = [];
     const emptyFiles: string[] = [];
+    const nonCodeFiles: string[] = [];
     let numberOfSourcingFiles = 0;
     for await (const file of globIterate(`${ssocPath}/sources/**/*.[r|R]`, { absolute: true })) {
+        // Exclude files that are binary
         if (isBinaryFileSync(file)) {
             binaryFiles.push(file);
             continue;
         }
 
+        // Exclude files that are empty
         const size = getSizeOfFile(file);
-        if (size.sourcedBytes === 0) {
-            logger.silly(`File ${file} has size 0B.`);
+        if (size.sourced.bytes === 0 || size.sourced.nonEmptyLines === 0) {
+            logger.silly(`File ${file} has size 0B or has only empty lines.`);
             emptyFiles.push(file);
             continue;
         }
 
-        if (size.sourcedBytes > size.singleBytes) {
+        // Exclude files that contain no code
+        if (size.sourced.codeLines === 0) {
+            logger.silly(`File ${file} has 0 code lines.`);
+            nonCodeFiles.push(file);
+            continue;
+        }
+
+        // Count the number of files that source other files
+        if (size.sourced.bytes > size.single.bytes) {
             numberOfSourcingFiles++;
         }
 
-        // Add non-binary files with a size greater than 0
+        // Add non-binary files with a size greater than 0, containing code
         files.push({ path: file, size });
     }
     const distributedFiles = equallyDistribute(files, options.seed);
@@ -82,19 +93,21 @@ export async function runDiscover(argv: string[]) {
         files: distributedFiles,
         binaryFiles,
         emptyFiles,
+        nonCodeFiles,
         numberOfSourcingFiles,
     };
     fs.writeFileSync(outputPath, JSON.stringify(data));
     const csvPath = outputPath.replace(".json", ".csv");
     fs.writeFileSync(
         csvPath,
-        "path,sourcedBytes,singleBytes,sourcedLines,singleLines\n" +
-            distributedFiles
+        "path,sourcedBytes,singleBytes,sourcedLines,singleLines,sourcedNonEmptyLines,singleNonEmptyLines,sourcedCodeLines,singleCodeLines\n" +
+            files
                 .sort(compareFiles)
-                .map(
-                    ({ path, size }) =>
-                        `"${path}",${size.sourcedBytes},${size.singleBytes},${size.sourcedLines},${size.singleLines}`,
-                )
+                .map(({ path, size }) => {
+                    const sourced = size.sourced;
+                    const single = size.single;
+                    return `"${path}",${sourced.bytes},${single.bytes},${sourced.lines},${single.lines},${sourced.nonEmptyLines},${single.nonEmptyLines},${sourced.codeLines},${single.codeLines}`;
+                })
                 .join("\n"),
     );
 
@@ -163,13 +176,19 @@ function getSizeOfFile(filePath: string, maxRecursion = 10): Size | undefined {
     }
 
     const singleSize = fs.statSync(filePath).size;
-    const singleLines = fs.readFileSync(filePath, "utf8").split("\n").length;
+    const lines = fs.readFileSync(filePath, "utf8").split("\n");
+    const nonEmptyLines = lines.filter((line) => line.trim().length > 0);
+    const codeLines = nonEmptyLines.filter((line) => !line.trim().startsWith("#"));
 
-    const size = {
-        sourcedBytes: singleSize,
-        singleBytes: singleSize,
-        sourcedLines: singleLines,
-        singleLines: singleLines,
+    const single: FileSize = {
+        bytes: singleSize,
+        lines: lines.length,
+        nonEmptyLines: nonEmptyLines.length,
+        codeLines: codeLines.length,
+    };
+    const size: Size = {
+        single: single,
+        sourced: single,
     };
 
     const sourcePaths = extractSourcePaths(filePath);
@@ -180,12 +199,20 @@ function getSizeOfFile(filePath: string, maxRecursion = 10): Size | undefined {
         const sourceFile = path.join(path.dirname(filePath), sourcePath);
         const sourcedSize = getSizeOfFile(sourceFile, maxRecursion - 1);
         if (sourcedSize) {
-            size.sourcedBytes += sourcedSize.sourcedBytes;
-            size.sourcedLines += sourcedSize.sourcedLines;
+            size.sourced = sumFileSize(size.sourced, sourcedSize.sourced);
         }
     }
 
     return size;
+}
+
+function sumFileSize(a: FileSize, b: FileSize): FileSize {
+    return {
+        bytes: a.bytes + b.bytes,
+        lines: a.lines + b.lines,
+        nonEmptyLines: a.nonEmptyLines + b.nonEmptyLines,
+        codeLines: a.codeLines + b.codeLines,
+    };
 }
 
 /**
@@ -211,7 +238,7 @@ function extractSourcePaths(filePath: string): string[] {
  * If the sizes are equal, the paths are compared to ensure a stable sort.
  */
 function compareFiles(a: FileInfo, b: FileInfo) {
-    const compare = b.size.sourcedBytes - a.size.sourcedBytes;
+    const compare = b.size.sourced.bytes - a.size.sourced.bytes;
     if (compare === 0) {
         return a.path.localeCompare(b.path);
     }
