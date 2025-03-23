@@ -7,6 +7,9 @@ import {
     writeTime,
     readUltimateStats,
     writeUltimateStats,
+    currentISODate,
+    ensureDirectoryExists,
+    onFilesInBothPaths,
 } from "../utils";
 import fs from "fs";
 import {
@@ -51,6 +54,14 @@ export async function runEval(argv: string[]) {
 
     const sensPath = path.join(resultsPath, "sens", "summary-ultimate.json");
     const insensPath = path.join(resultsPath, "insens", "summary-ultimate.json");
+
+    logger.info(`Comparing file-by-file - ${currentISODate()}`);
+    comparePerFile(
+        resultsPath,
+        path.join(resultsPath, "insens", "summary"),
+        path.join(resultsPath, "sens", "summary"),
+    );
+    logger.info(`Finished comparing file-by-file - ${currentISODate()}`);
 
     logger.info(`Comparing the summaries in ${sensPath} and ${insensPath}`);
 
@@ -320,4 +331,23 @@ function anyValueCheck(obj: unknown) {
             logger.warn(`[SANITY CHECK] Diff for ${name} is NaN`);
         }
     });
+}
+
+function comparePerFile(basePath: string, insensPath: string, sensPath: string) {
+    const { both, single } = onFilesInBothPaths(
+        insensPath,
+        sensPath,
+        (fileName) => fileName === "summary-per-file.json",
+        (dir, insensPath, sensPath) => {
+            const insensStats = readUltimateStats(insensPath);
+            const sensStats = readUltimateStats(sensPath);
+            const comparison = createUltimateEvalStats(insensStats, sensStats);
+
+            const outputPath = path.join(basePath, "compare", dir, "compare.json");
+            ensureDirectoryExists(outputPath);
+            writeUltimateStats(comparison, outputPath);
+        },
+        "onFilesInBothPaths",
+    );
+    logger.info(`Compared ${both}/${both + single} files`);
 }

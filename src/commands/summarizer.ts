@@ -10,15 +10,11 @@ import {
     forkAsync,
     getRepoInfo,
     writeTime,
-    ensureDirectoryExists,
-    readUltimateStats,
-    writeUltimateStats,
     statsReviver,
     iterateFilesInDir,
-    onFilesInBothPaths,
 } from "../utils";
 import { processSummarizedRunMeasurement, UltimateSlicerStats } from "../flowr-logic";
-import { capitalize, createUltimateEvalStats, flattenObject, RepoInfo, Times } from "../model";
+import { capitalize, flattenObject, RepoInfo, Times } from "../model";
 import assert from "assert";
 import { globIterate } from "glob";
 import readline from "readline";
@@ -138,12 +134,6 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
     const perFileEnd = Date.now();
     logger.info(`Finished summarizing runs per file - ${currentISODate()}`);
 
-    logger.info(`Comparing file-by-file - ${currentISODate()}`);
-    const compareFilesStart = Date.now();
-    comparePerFile(resultsPath, insensPath, sensPath);
-    const compareFilesEnd = Date.now();
-    logger.info(`Finished comparing file-by-file - ${currentISODate()}`);
-
     const endTime = Date.now();
     logEnd("summarizer");
 
@@ -153,7 +143,6 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
             sens: createRunTime(sensStart, sensEnd),
             insens: createRunTime(insensStart, insensEnd),
             perFile: createRunTime(perFileStart, perFileEnd),
-            compareFiles: createRunTime(compareFilesStart, compareFilesEnd),
         },
         build: buildStart && buildEnd ? createRunTime(buildStart, buildEnd) : undefined,
     };
@@ -209,23 +198,4 @@ async function writeSummariesToCsv(basePath: string) {
     }
     csvStream.end();
     csvStream.close();
-}
-
-function comparePerFile(basePath: string, insensPath: string, sensPath: string) {
-    const { both, single } = onFilesInBothPaths(
-        insensPath,
-        sensPath,
-        (fileName) => fileName === "summary-per-file.json",
-        (dir, insensPath, sensPath) => {
-            const insensStats = readUltimateStats(insensPath);
-            const sensStats = readUltimateStats(sensPath);
-            const comparison = createUltimateEvalStats(insensStats, sensStats);
-
-            const outputPath = path.join(basePath, "compare", dir, "compare.json");
-            ensureDirectoryExists(outputPath);
-            writeUltimateStats(comparison, outputPath);
-        },
-        "onFilesInBothPaths",
-    );
-    logger.info(`Compared ${both}/${both + single} files`);
 }
