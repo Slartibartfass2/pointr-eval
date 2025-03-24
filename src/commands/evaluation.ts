@@ -56,7 +56,7 @@ export async function runEval(argv: string[]) {
     const insensPath = path.join(resultsPath, "insens", "summary-ultimate.json");
 
     logger.info(`Comparing file-by-file - ${currentISODate()}`);
-    comparePerFile(
+    const comparison = comparePerFile(
         resultsPath,
         path.join(resultsPath, "insens", "summary"),
         path.join(resultsPath, "sens", "summary"),
@@ -114,6 +114,7 @@ export async function runEval(argv: string[]) {
     latex += "\n" + objectToLaTeX(errors);
     latex += "\n" + objectToLaTeX({ benchConfig });
     latex += "\n" + objectToLaTeX({ system: sysInfo });
+    latex += "\n" + objectToLaTeX({ uncomparableFiles: comparison.single });
     fs.writeFileSync(path.join(resultsPath, "eval-stats.tex"), latex);
 
     // Sanity checks
@@ -333,7 +334,14 @@ function anyValueCheck(obj: unknown) {
     });
 }
 
-function comparePerFile(basePath: string, insensPath: string, sensPath: string) {
+function comparePerFile(
+    basePath: string,
+    insensPath: string,
+    sensPath: string,
+): {
+    both: number;
+    single: number;
+} {
     const { both, single } = onFilesInBothPaths(
         insensPath,
         sensPath,
@@ -350,4 +358,5 @@ function comparePerFile(basePath: string, insensPath: string, sensPath: string) 
         "onFilesInBothPaths",
     );
     logger.info(`Compared ${both}/${both + single} files`);
+    return { both, single };
 }
