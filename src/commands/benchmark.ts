@@ -108,8 +108,8 @@ export async function runBenchmark(argv: string[]) {
 
     const benchmarkPath = path.join(flowrPath, "dist/src/cli/benchmark-app");
     const benchConfig: BenchConfig = {
-        sliceSampling: 40,
-        timeLimitInMinutes: 25,
+        sliceSampling: 50,
+        timeLimitInMinutes: 30,
         runs: 1,
         threshold: 20,
         samplingStrategy: "equidistant",
