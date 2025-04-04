@@ -7,6 +7,8 @@ import path from "path";
 import {
     createRunTime,
     ensureDirectoryExists,
+    flattenObject,
+    objectToLaTeX,
     printTimes,
     reconstructObject,
     writeTime,
@@ -14,9 +16,10 @@ import {
 import fs from "fs";
 import { runDiscover } from "./discover";
 import assert from "assert";
-import { flattenObject, objectToLaTeX, Times } from "../model";
+import { Times } from "../model/model";
+import { Profile } from "../profile";
 
-export async function runFull(argv: string[]) {
+export async function runFull(argv: string[], profile: Profile) {
     const runDefinitions: OptionDefinition[] = [
         { name: "ssoc-path", alias: "i", type: String },
         { name: "flowr-path", alias: "f", type: String },
@@ -58,7 +61,7 @@ export async function runFull(argv: string[]) {
             outputPath,
             "--seed",
             options.seed,
-        ]);
+        ], profile);
     }
 
     await runBenchmark([
@@ -69,14 +72,15 @@ export async function runFull(argv: string[]) {
         "--output-path",
         outputPath,
         ...(options.limit ? ["--limit", options.limit] : []),
-    ]);
+    ], profile);
 
     await runSummarizer(
         ["--results-path", outputPath, "--flowr-path", options["flowr-path"]],
+        profile,
         true,
     );
 
-    await runEval(["--results-path", outputPath]);
+    await runEval(["--results-path", outputPath], profile);
 
     const endTime = Date.now();
     logEnd("full");

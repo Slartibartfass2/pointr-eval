@@ -5,11 +5,13 @@ import { runBenchmark } from "./commands/benchmark";
 import { runDiscover } from "./commands/discover";
 import { runSummarizer } from "./commands/summarizer";
 import { runFull } from "./commands/full";
+import { getProfiles, Profile } from "./profile";
 
 const optionDefinitions: OptionDefinition[] = [
     { name: "name", defaultOption: true, type: String },
     { name: "verbose", alias: "v", type: Boolean },
     { name: "debug", alias: "d", type: Boolean },
+    { name: "profile", alias: "p", type: String },
 ];
 
 export type Command = "eval" | "benchmark" | "discover" | "summarizer" | "full";
@@ -45,16 +47,26 @@ export class Cli {
             return;
         }
 
+        let profile: Profile | undefined;
+        if (this.parsedOptions.profile) {
+            const profiles = getProfiles();
+            profile = profiles.find((p) => p.name === this.parsedOptions.profile);
+            if (!profile) {
+                logger.error(`Profile ${this.parsedOptions.profile} not found.`);
+                return;
+            }
+        }
+
         if (this.parsedOptions.name === "discover") {
-            await runDiscover(this.argv);
+            await runDiscover(this.argv, profile);
         } else if (this.parsedOptions.name === "benchmark") {
-            await runBenchmark(this.argv);
+            await runBenchmark(this.argv, profile);
         } else if (this.parsedOptions.name === "summarizer") {
-            await runSummarizer(this.argv);
+            await runSummarizer(this.argv, profile);
         } else if (this.parsedOptions.name === "eval") {
-            await runEval(this.argv);
+            await runEval(this.argv, profile);
         } else if (this.parsedOptions.name === "full") {
-            await runFull(this.argv);
+            await runFull(this.argv, profile);
         }
     }
 }

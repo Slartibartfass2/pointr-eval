@@ -12,12 +12,16 @@ import {
     writeTime,
     statsReviver,
     iterateFilesInDir,
+    flattenObject,
+    capitalize,
 } from "../utils";
-import { processSummarizedRunMeasurement, UltimateSlicerStats } from "../flowr-logic";
-import { capitalize, flattenObject, RepoInfo, Times } from "../model";
+import { processSummarizedRunMeasurement } from "../utils/flowr-logic";
+import { RepoInfo, Times } from "../model/model";
 import assert from "assert";
 import { globIterate } from "glob";
 import readline from "readline";
+import { UltimateSlicerStats } from "@eagleoutice/flowr/benchmark/summarizer/data";
+import { Profile } from "../profile";
 
 /**
  * Run the summarizer command.
@@ -26,7 +30,7 @@ import readline from "readline";
  * Runs the summarizer for the field-sensitive and field-insensitive analyses.
  * Stores the results in the `results-path` directory.
  */
-export async function runSummarizer(argv: string[], skipBuild = false) {
+export async function runSummarizer(argv: string[], profile: Profile, skipBuild = false) {
     const runDefinitions: OptionDefinition[] = [
         { name: "results-path", alias: "i", type: String, defaultValue: "./results" },
         { name: "flowr-path", alias: "f", type: String },

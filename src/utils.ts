@@ -2,16 +2,10 @@ import fs from "fs";
 import { exec, fork } from "child_process";
 import { logger } from "./logger";
 import path from "path";
-import {
-    capitalize,
-    flattenObject,
-    RepoInfo,
-    RunTime,
-    Times,
-    EvalUltimateSlicerStats,
-} from "./model";
+import { RepoInfo, RunTime, Times } from "./model/model";
 import formatDuration from "format-duration";
 import { UltimateSlicerStats } from "@eagleoutice/flowr/benchmark/summarizer/data";
+import { EvalUltimateSlicerStats } from "./model/flowr-models";
 
 /**
  * Execute a command asynchronously.
@@ -311,4 +305,51 @@ export function onFilesInBothPaths(
     }
 
     return { both: files.size - single, single: single };
+}
+
+export function objectToLaTeX(obj: unknown): string {
+    return flattenObject(obj)
+        .map(([key, value]) => `\\def\\${key.map(capitalize).join("")}{${value}}`)
+        .join("\n");
+}
+
+export function flattenObject(
+    object: unknown,
+    stopAtObject: (object: unknown) => boolean = () => false,
+    previousKeys: string[] = [],
+): [string[], unknown][] {
+    const lines: [string[], unknown][] = [];
+    if (stopAtObject(object)) {
+        lines.push([previousKeys, object]);
+    } else if (object instanceof Map) {
+        for (const [key, val] of object.entries()) {
+            lines.push(...flattenObject(val, stopAtObject, [...previousKeys, formatKey(key)]));
+        }
+    } else if (typeof object === "object") {
+        for (const key in object) {
+            if (Object.hasOwn(object, key)) {
+                lines.push(
+                    ...flattenObject(object[key], stopAtObject, [...previousKeys, formatKey(key)]),
+                );
+            }
+        }
+    } else {
+        lines.push([previousKeys, object]);
+    }
+    return lines;
+}
+
+function formatKey(key: string, sep = " ", upper = false): string {
+    const parts = key.split(sep);
+    return (
+        (upper ? "" : parts[0]) +
+        parts
+            .slice(upper ? 0 : 1)
+            .map(capitalize)
+            .join("")
+    );
+}
+
+export function capitalize(text: string): string {
+    return text[0].toUpperCase() + text.slice(1);
 }

@@ -8,6 +8,7 @@ import {
     Reduction,
     SummarizedSlicerStats,
     TimePerToken,
+    UltimateSlicerStats,
 } from "@eagleoutice/flowr/benchmark/summarizer/data";
 import { SummarizedMeasurement, summarizeMeasurement } from "@eagleoutice/flowr/util/summarizer";
 import { DefaultMap } from "@eagleoutice/flowr/util/defaultmap";
@@ -18,42 +19,26 @@ import {
     summarizeSummarizedTimePerToken,
     summarizeTimePerToken,
 } from "@eagleoutice/flowr/benchmark/summarizer/first-phase/process";
-import { logger } from "./logger";
+import { logger } from "../logger";
+import {
+    EvalMap,
+    EvalReduction,
+    EvalSlicerStatsDataflow,
+    EvalSummarizedMeasurement,
+    EvalTimePerToken,
+    EvalUltimateSlicerStats,
+    EvalValues,
+    EvalWrapper,
+    SlicerStatsDataflow,
+} from "../model/flowr-models";
 
-// TODO: overwrite when flowr package is updated
-export interface SlicerStatsDataflow<T = number> {
-    numberOfNodes: T;
-    numberOfEdges: T;
-    numberOfCalls: T;
-    numberOfFunctionDefinitions: T;
-    /* size of object in bytes as measured by v8 serialization */
-    sizeOfObject: T;
-    storedVertexIndices: T;
-    storedEnvIndices: T;
-    overwrittenIndices: T;
-}
-
-export interface UltimateSlicerStats {
-    totalRequests: number;
-    totalSlices: number;
-    commonMeasurements: Map<CommonSlicerMeasurements, SummarizedMeasurement>;
-    perSliceMeasurements: Map<PerSliceMeasurements, SummarizedMeasurement>;
-    retrieveTimePerToken: TimePerToken;
-    normalizeTimePerToken: TimePerToken;
-    dataflowTimePerToken: TimePerToken;
-    totalCommonTimePerToken: TimePerToken;
-    sliceTimePerToken: TimePerToken;
-    reconstructTimePerToken: TimePerToken;
-    totalPerSliceTimePerToken: TimePerToken;
-    /** sum */
-    failedToRepParse: number;
-    /** sum */
-    timesHitThreshold: number;
-    reduction: Reduction<SummarizedMeasurement>;
-    /** reduction, but without taking into account comments and empty lines */
-    reductionNoFluff: Reduction<SummarizedMeasurement>;
-    input: SlicerStatsInput<SummarizedMeasurement>;
-    dataflow: SlicerStatsDataflow<SummarizedMeasurement>;
+export function isEvalValues(value: unknown): value is EvalValues {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        "insensitiveValue" in value &&
+        "sensitiveValue" in value
+    );
 }
 
 export function processSummarizedRunMeasurement(
@@ -233,4 +218,214 @@ function jsonReplacer(key: unknown, value: unknown): unknown {
     } else {
         return value;
     }
+}
+
+export function createUltimateEvalStats(
+    insensResult: UltimateSlicerStats,
+    sensResult: UltimateSlicerStats,
+): EvalUltimateSlicerStats {
+    return {
+        totalRequests: {
+            insensitiveValue: insensResult.totalRequests,
+            sensitiveValue: sensResult.totalRequests,
+        },
+        totalSlices: {
+            insensitiveValue: insensResult.totalSlices,
+            sensitiveValue: sensResult.totalSlices,
+        },
+        commonMeasurements: createEvalMap(
+            insensResult.commonMeasurements,
+            sensResult.commonMeasurements,
+        ),
+        perSliceMeasurements: createEvalMap(
+            insensResult.perSliceMeasurements,
+            sensResult.perSliceMeasurements,
+        ),
+        retrieveTimePerToken: getEvalTimePerToken(
+            insensResult.retrieveTimePerToken,
+            sensResult.retrieveTimePerToken,
+        ),
+        normalizeTimePerToken: getEvalTimePerToken(
+            insensResult.normalizeTimePerToken,
+            sensResult.normalizeTimePerToken,
+        ),
+        dataflowTimePerToken: getEvalTimePerToken(
+            insensResult.dataflowTimePerToken,
+            sensResult.dataflowTimePerToken,
+        ),
+        totalCommonTimePerToken: getEvalTimePerToken(
+            insensResult.totalCommonTimePerToken,
+            sensResult.totalCommonTimePerToken,
+        ),
+        sliceTimePerToken: getEvalTimePerToken(
+            insensResult.sliceTimePerToken,
+            sensResult.sliceTimePerToken,
+        ),
+        reconstructTimePerToken: getEvalTimePerToken(
+            insensResult.reconstructTimePerToken,
+            sensResult.reconstructTimePerToken,
+        ),
+        totalPerSliceTimePerToken: getEvalTimePerToken(
+            insensResult.totalPerSliceTimePerToken,
+            sensResult.totalPerSliceTimePerToken,
+        ),
+        failedToRepParse: getEvalValues(insensResult.failedToRepParse, sensResult.failedToRepParse),
+        timesHitThreshold: getEvalValues(
+            insensResult.timesHitThreshold,
+            sensResult.timesHitThreshold,
+        ),
+        reduction: createEvalReduction(insensResult.reduction, sensResult.reduction),
+        reductionNoFluff: createEvalReduction(
+            insensResult.reductionNoFluff,
+            sensResult.reductionNoFluff,
+        ),
+        input: insensResult.input,
+        dataflow: createEvalSlicerStatsDataflow(
+            insensResult.dataflow as SlicerStatsDataflow<SummarizedMeasurement>,
+            sensResult.dataflow as SlicerStatsDataflow<SummarizedMeasurement>,
+        ),
+    };
+}
+
+function getEvalValues(insensitiveValue: number, sensitiveValue: number): EvalValues {
+    const diff = sensitiveValue - insensitiveValue;
+    return {
+        insensitiveValue,
+        sensitiveValue,
+        diff,
+        diffRelative: diff / insensitiveValue,
+        factor: sensitiveValue / insensitiveValue,
+    };
+}
+
+function getEvalSummarizedMeasurement(
+    insensitiveValue: SummarizedMeasurement,
+    sensitiveValue: SummarizedMeasurement,
+): EvalSummarizedMeasurement {
+    return {
+        min: getEvalValues(insensitiveValue.min, sensitiveValue.min),
+        max: getEvalValues(insensitiveValue.max, sensitiveValue.max),
+        median: getEvalValues(insensitiveValue.median, sensitiveValue.median),
+        total: getEvalValues(insensitiveValue.total, sensitiveValue.total),
+        mean: getEvalValues(insensitiveValue.mean, sensitiveValue.mean),
+        std: getEvalValues(insensitiveValue.std, sensitiveValue.std),
+    };
+}
+
+function createEvalMap<K>(
+    insensMap: Map<K, SummarizedMeasurement>,
+    sensMap: Map<K, SummarizedMeasurement>,
+): EvalMap<K, EvalSummarizedMeasurement> {
+    const result: EvalMap<K, EvalSummarizedMeasurement> = new Map();
+    for (const [key, sensValue] of sensMap.entries()) {
+        result.set(key, getEvalSummarizedMeasurement(insensMap.get(key), sensValue));
+    }
+    return result;
+}
+
+function getEvalTimePerToken(insensValue: TimePerToken, sensValue: TimePerToken): EvalTimePerToken {
+    return {
+        raw: getEvalSummarizedMeasurement(insensValue.raw, sensValue.raw),
+        normalized: getEvalSummarizedMeasurement(insensValue.normalized, sensValue.normalized),
+    };
+}
+
+function createEvalReduction(
+    insensValue: Reduction<SummarizedMeasurement>,
+    sensValue: Reduction<SummarizedMeasurement>,
+): EvalReduction {
+    return {
+        numberOfLines: getEvalSummarizedMeasurement(
+            insensValue.numberOfLines,
+            sensValue.numberOfLines,
+        ),
+        numberOfLinesNoAutoSelection: getEvalSummarizedMeasurement(
+            insensValue.numberOfLinesNoAutoSelection,
+            sensValue.numberOfLinesNoAutoSelection,
+        ),
+        numberOfCharacters: getEvalSummarizedMeasurement(
+            insensValue.numberOfCharacters,
+            sensValue.numberOfCharacters,
+        ),
+        numberOfNonWhitespaceCharacters: getEvalSummarizedMeasurement(
+            insensValue.numberOfNonWhitespaceCharacters,
+            sensValue.numberOfNonWhitespaceCharacters,
+        ),
+        numberOfRTokens: getEvalSummarizedMeasurement(
+            insensValue.numberOfRTokens,
+            sensValue.numberOfRTokens,
+        ),
+        numberOfNormalizedTokens: getEvalSummarizedMeasurement(
+            insensValue.numberOfNormalizedTokens,
+            sensValue.numberOfNormalizedTokens,
+        ),
+        numberOfDataflowNodes: getEvalSummarizedMeasurement(
+            insensValue.numberOfDataflowNodes,
+            sensValue.numberOfDataflowNodes,
+        ),
+    };
+}
+
+function createEvalSlicerStatsDataflow(
+    insensValue: SlicerStatsDataflow<SummarizedMeasurement>,
+    sensValue: SlicerStatsDataflow<SummarizedMeasurement>,
+): EvalSlicerStatsDataflow {
+    const storedVertexIndices = getEvalSummarizedMeasurement(
+        insensValue.storedVertexIndices,
+        sensValue.storedVertexIndices,
+    );
+    const storedEnvIndices = getEvalSummarizedMeasurement(
+        insensValue.storedEnvIndices,
+        sensValue.storedEnvIndices,
+    );
+    const overwrittenIndices = getEvalSummarizedMeasurement(
+        insensValue.overwrittenIndices,
+        sensValue.overwrittenIndices,
+    );
+
+    return {
+        numberOfNodes: getEvalSummarizedMeasurement(
+            insensValue.numberOfNodes,
+            sensValue.numberOfNodes,
+        ),
+        numberOfEdges: getEvalSummarizedMeasurement(
+            insensValue.numberOfEdges,
+            sensValue.numberOfEdges,
+        ),
+        numberOfCalls: getEvalSummarizedMeasurement(
+            insensValue.numberOfCalls,
+            sensValue.numberOfCalls,
+        ),
+        numberOfFunctionDefinitions: getEvalSummarizedMeasurement(
+            insensValue.numberOfFunctionDefinitions,
+            sensValue.numberOfFunctionDefinitions,
+        ),
+        sizeOfObject: getEvalSummarizedMeasurement(
+            insensValue.sizeOfObject,
+            sensValue.sizeOfObject,
+        ),
+        storedVertexIndices: onlyValues(storedVertexIndices),
+        storedEnvIndices: onlyValues(storedEnvIndices),
+        overwrittenIndices: onlyValues(overwrittenIndices),
+    };
+}
+
+function onlyValues(
+    summarized: EvalWrapper<SummarizedMeasurement>,
+): EvalWrapper<SummarizedMeasurement> {
+    function onlyVs(value: EvalValues): EvalValues {
+        return {
+            insensitiveValue: value.insensitiveValue,
+            sensitiveValue: value.sensitiveValue,
+        } as EvalValues;
+    }
+
+    return {
+        min: onlyVs(summarized.min),
+        max: onlyVs(summarized.max),
+        median: onlyVs(summarized.median),
+        total: onlyVs(summarized.total),
+        mean: onlyVs(summarized.mean),
+        std: onlyVs(summarized.std),
+    };
 }

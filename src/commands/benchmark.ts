@@ -14,7 +14,9 @@ import {
     onFilesInBothPaths,
     writeTime,
 } from "../utils";
-import { DiscoverData, BenchConfig, Times, RepoInfos } from "../model";
+import { DiscoverData, BenchConfig, Times, RepoInfos } from "../model/model";
+import { Profile } from "../profile";
+import { PathManager } from "../path-controller";
 
 /**
  * Run the benchmark command.
@@ -23,7 +25,7 @@ import { DiscoverData, BenchConfig, Times, RepoInfos } from "../model";
  * Expects the input file to be a JSON file with the paths of the files to analyze (Result of the discover command).
  * Runs the benchmark with and without pointer analysis. Stores the results in the output directory.
  */
-export async function runBenchmark(argv: string[]) {
+export async function runBenchmark(argv: string[], profile: Profile, pathManager: PathManager) {
     const runDefinitions: OptionDefinition[] = [
         { name: "files-path", alias: "i", type: String },
         { name: "flowr-path", alias: "f", type: String },
@@ -62,17 +64,6 @@ export async function runBenchmark(argv: string[]) {
     ensureDirectoryExists(outputPath);
 
     logger.info(`Storing the results in ${outputPath}`);
-
-    // Create output directories
-    const sensPath = path.join(outputPath, "sens", "bench");
-    fs.mkdirSync(sensPath, { recursive: true });
-    const insensPath = path.join(outputPath, "insens", "bench");
-    fs.mkdirSync(insensPath, { recursive: true });
-
-    const logSensPath = path.join(outputPath, "bench-sens.log");
-    fs.writeFileSync(logSensPath, "");
-    const logInsensPath = path.join(outputPath, "bench-insens.log");
-    fs.writeFileSync(logInsensPath, "");
 
     const discoverData = JSON.parse(fs.readFileSync(filesPath, "utf8")) as DiscoverData;
     logger.verbose(
@@ -114,28 +105,6 @@ export async function runBenchmark(argv: string[]) {
         threshold: 20,
         samplingStrategy: "equidistant",
     };
-    const baseArgs = [
-        // "--max-file-slices",
-        //"4230", // 99% of the files have less than 4231 slices
-        "--parser",
-        "tree-sitter",
-        // "-l",
-        // "3300", // file limit
-        "-s",
-        `${benchConfig.sliceSampling}`,
-        "--sampling-strategy",
-        benchConfig.samplingStrategy,
-        "--per-file-time-limit",
-        `${benchConfig.timeLimitInMinutes * 60000}`,
-        "-i",
-        benchFilesPath,
-        "-r", // runs
-        `${benchConfig.runs}`,
-        "-t", // threshold (default 75)
-        `${benchConfig.threshold}`,
-    ];
-    const sensArgs = [...baseArgs, "-o", sensPath, "--enable-pointer-tracking"];
-    const insensArgs = [...baseArgs, "-o", insensPath];
 
     fs.writeFileSync(path.join(outputPath, "bench-config.json"), JSON.stringify(benchConfig));
 
@@ -143,29 +112,28 @@ export async function runBenchmark(argv: string[]) {
     await buildFlowr(flowrPath, outputPath);
     const endTimeBuild = Date.now();
 
+    const baseArgs = ["-i", benchFilesPath];
+
     // Run the benchmark
-    logger.info(`Running the benchmark without pointer analysis - ${currentISODate()}`);
-    logger.verbose(`Insensitive benchmark args: ${insensArgs.join(" ")}`);
-    const insensStart = Date.now();
-    let insensEnd: number;
-    const insensProc = forkAsync(benchmarkPath, insensArgs, logInsensPath).then(() => {
-        logger.info(`Finished the benchmark without pointer analysis - ${currentISODate()}`);
-        insensEnd = Date.now();
-    });
+    for (const config of profile.configs) {
+        const configResultsPath = pathManager.getResultsPath(config.name, "benchmark");
+        const logPath = pathManager.getLogPath(config.name, "benchmark");
 
-    // TODO: check whether this affects the benchmark results
-    await insensProc;
+        const args = [
+            ...baseArgs,
+            ...profile.benchmarkArgs,
+            ...config.benchmarkArgs,
+            "-o",
+            configResultsPath,
+        ];
+        logger.verbose(`Benchmark args for config ${config.name}: ${args.join(" ")}`);
 
-    logger.info(`Running the benchmark with pointer analysis - ${currentISODate()}`);
-    logger.verbose(`Sensitive benchmark args: ${sensArgs.join(" ")}`);
-    const sensStart = Date.now();
-    let sensEnd: number;
-    const sensProc = forkAsync(benchmarkPath, sensArgs, logSensPath).then(() => {
-        logger.info(`Finished the benchmark with pointer analysis - ${currentISODate()}`);
-        sensEnd = Date.now();
-    });
-
-    await Promise.all([sensProc, insensProc]);
+        // Run benchmark with config
+        logger.info(`Running the benchmark with config ${config.name} - ${currentISODate()}`);
+        await forkAsync(benchmarkPath, args, logPath).then(() => {
+            logger.info(`Finished the benchmark with config ${config.name} - ${currentISODate()}`);
+        });
+    }
 
     // Delete results which aren't in both results
     logger.info(`Removing results which are not in both runs - ${currentISODate()}`);

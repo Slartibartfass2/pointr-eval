@@ -10,19 +10,16 @@ import {
     currentISODate,
     ensureDirectoryExists,
     onFilesInBothPaths,
+    objectToLaTeX,
+    flattenObject,
 } from "../utils";
 import fs from "fs";
-import {
-    createUltimateEvalStats,
-    printResults,
-    objectToLaTeX,
-    EvalValues,
-    flattenObject,
-    RepoInfos,
-    SystemInfo,
-} from "../model";
+import { RepoInfos, SystemInfo } from "../model/model";
 import readline from "readline";
-import sysinfo from "systeminformation";
+import systemInfo from "systeminformation";
+import { EvalValues } from "../model/flowr-models";
+import { createUltimateEvalStats } from "../utils/flowr-logic";
+import { Profile } from "../profile";
 
 /**
  * Run the evaluation command.
@@ -30,7 +27,7 @@ import sysinfo from "systeminformation";
  * Expects the summarizer command to be run.
  * Compares the summaries of the field-sensitive and field-insensitive analyses.
  */
-export async function runEval(argv: string[]) {
+export async function runEval(argv: string[], profile: Profile) {
     const runDefinitions: OptionDefinition[] = [
         { name: "results-path", alias: "i", type: String, defaultValue: "./results" },
     ];
@@ -71,8 +68,6 @@ export async function runEval(argv: string[]) {
     const evalStats = createUltimateEvalStats(insensResult, sensResult);
     writeUltimateStats(evalStats, path.join(resultsPath, "eval-stats.json"));
 
-    printResults(evalStats);
-
     const repoInfo = JSON.parse(
         fs.readFileSync(path.join(resultsPath, "repo-info.json"), "utf8"),
     ) as RepoInfos;
@@ -96,10 +91,10 @@ export async function runEval(argv: string[]) {
     );
 
     // Output system information
-    const cpuInfo = await sysinfo.cpu();
-    const memInfo = await sysinfo.mem();
-    const osInfo = await sysinfo.osInfo();
-    const versions = await sysinfo.versions();
+    const cpuInfo = await systemInfo.cpu();
+    const memInfo = await systemInfo.mem();
+    const osInfo = await systemInfo.osInfo();
+    const versions = await systemInfo.versions();
     const sysInfo: SystemInfo = {
         cpu: `${cpuInfo.manufacturer} ${cpuInfo.brand} (${cpuInfo.speed} GHz)`,
         cores: cpuInfo.cores,

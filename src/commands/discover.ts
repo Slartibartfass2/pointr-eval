@@ -10,9 +10,10 @@ import {
     getRepoInfo,
     writeTime,
 } from "../utils";
-import { DiscoverData, FileInfo, FileSize, Size } from "../model";
+import { DiscoverData, FileInfo, FileSize, Size } from "../model/model";
 import { isBinaryFileSync } from "isbinaryfile";
 import seedrandom from "seedrandom";
+import { Profile } from "../profile";
 
 /**
  * Run the discover command.
@@ -21,7 +22,7 @@ import seedrandom from "seedrandom";
  * Discovers all files in the directory and its subdirectories.
  * Writes the paths of the discovered files to the output file.
  */
-export async function runDiscover(argv: string[]) {
+export async function runDiscover(argv: string[], profile: Profile) {
     const runDefinitions: OptionDefinition[] = [
         { name: "ssoc-path", alias: "i", type: String },
         { name: "output-path", alias: "o", type: String, defaultValue: "files.json" },
