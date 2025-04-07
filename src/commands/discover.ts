@@ -1,18 +1,18 @@
 import commandLineArgs, { OptionDefinition } from "command-line-args";
-import { logEnd, logger, logStart } from "../logger";
+import { logger } from "../logger";
 import { globIterate } from "glob";
 import fs from "fs";
 import path from "path";
-import {
-    assertDirectory,
-    createRunTime,
-    ensureDirectoryExists,
-    getRepoInfo,
-    writeTime,
-} from "../utils";
-import { DiscoverData, FileInfo, FileSize, Size } from "../model";
+import { DiscoverData, DiscoverStats, FileInfo, FileSize, Size } from "../model/discover-data";
 import { isBinaryFileSync } from "isbinaryfile";
 import seedrandom from "seedrandom";
+import { PathManager } from "../path-manager";
+import { TimeManager } from "../time-manager";
+import { Profile } from "../profile";
+import { assertDirectory, writeJsonFile } from "../utils/fs-helper";
+import { getRepoInfo, RepoInfos } from "../utils/repo-info";
+
+const runDefinitions: OptionDefinition[] = [{ name: "ssoc-path", alias: "i", type: String }];
 
 /**
  * Run the discover command.
@@ -21,21 +21,18 @@ import seedrandom from "seedrandom";
  * Discovers all files in the directory and its subdirectories.
  * Writes the paths of the discovered files to the output file.
  */
-export async function runDiscover(argv: string[]) {
-    const runDefinitions: OptionDefinition[] = [
-        { name: "ssoc-path", alias: "i", type: String },
-        { name: "output-path", alias: "o", type: String, defaultValue: "files.json" },
-        { name: "results-path", alias: "r", type: String },
-        { name: "seed", alias: "s", type: String, defaultValue: "U2xhcnRpYmFydGZhc3My" },
-    ];
+export async function runDiscover(
+    argv: string[],
+    profile: Profile,
+    pathManager: PathManager,
+    timeManager: TimeManager,
+) {
     const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
 
-    logStart("discover");
-    const startTime = Date.now();
+    timeManager.start("discover");
 
     const ssocPath = options["ssoc-path"];
-
     const doesSsocPathExist = assertDirectory(
         ssocPath,
         "The path to the SSOC repo is required. Use the --ssoc-path option.",
@@ -44,65 +41,26 @@ export async function runDiscover(argv: string[]) {
         return;
     }
 
-    const outputPath = path.resolve(options["output-path"]);
-    ensureDirectoryExists(outputPath);
-
-    const repoInfo = await getRepoInfo(ssocPath);
-    logger.verbose(`ssoc-data repo info: ${JSON.stringify(repoInfo)}`);
+    // Write the repo info to the output directory
+    const repoInfos: Pick<RepoInfos, "ssoc"> = { ssoc: await getRepoInfo(ssocPath) };
+    logger.verbose(`ssoc-data repo info: ${JSON.stringify(repoInfos.ssoc)}`);
+    writeJsonFile<RepoInfos>(pathManager.getPath("repo-info"), repoInfos as RepoInfos);
 
     // Discover all files in the SSOC repo
-    const files: FileInfo[] = [];
-    const binaryFiles: string[] = [];
-    const emptyFiles: string[] = [];
-    const nonCodeFiles: string[] = [];
-    let numberOfSourcingFiles = 0;
-    for await (const file of globIterate(`${ssocPath}/sources/**/*.[r|R]`, { absolute: true })) {
-        // Exclude files that are binary
-        if (isBinaryFileSync(file)) {
-            binaryFiles.push(file);
-            continue;
-        }
+    const data = await discoverFiles(ssocPath);
+    data.files = equallyDistribute(data.files, profile.randomSeed);
 
-        // Exclude files that are empty
-        const size = getSizeOfFile(file);
-        if (size.sourced.bytes === 0 || size.sourced.nonEmptyLines === 0) {
-            logger.silly(`File ${file} has size 0B or has only empty lines.`);
-            emptyFiles.push(file);
-            continue;
-        }
+    const stats = createDiscoverStats(data);
+    writeJsonFile(pathManager.getPath("discover-stats"), stats);
+    const outputPath = pathManager.getPath("discover-output");
+    writeJsonFile(outputPath, data);
 
-        // Exclude files that contain no code
-        if (size.sourced.codeLines === 0) {
-            logger.silly(`File ${file} has 0 code lines.`);
-            nonCodeFiles.push(file);
-            continue;
-        }
-
-        // Count the number of files that source other files
-        if (size.sourced.bytes > size.single.bytes) {
-            numberOfSourcingFiles++;
-        }
-
-        // Add non-binary files with a size greater than 0, containing code
-        files.push({ path: file, size });
-    }
-    const distributedFiles = equallyDistribute(files, options.seed);
-    const data: DiscoverData = {
-        repo: repoInfo,
-        seed: options.seed,
-        files: distributedFiles,
-        binaryFiles,
-        emptyFiles,
-        nonCodeFiles,
-        numberOfSourcingFiles,
-    };
-    fs.writeFileSync(outputPath, JSON.stringify(data));
     const csvPath = outputPath.replace(".json", ".csv");
     fs.writeFileSync(
         csvPath,
         "path,sourcedBytes,singleBytes,sourcedLines,singleLines,sourcedNonEmptyLines,singleNonEmptyLines,sourcedCodeLines,singleCodeLines\n" +
-            files
-                .sort(compareFiles)
+            data.files
+                .toSorted(compareFiles)
                 .map(({ path, size }) => {
                     const sourced = size.sourced;
                     const single = size.single;
@@ -112,15 +70,87 @@ export async function runDiscover(argv: string[]) {
     );
 
     logger.info(
-        `Discovered ${files.length} files in ${ssocPath} and wrote the paths to ${outputPath}`,
+        `Discovered ${data.files.length} files in ${ssocPath} and wrote the paths to ${outputPath}`,
     );
 
-    const endTime = Date.now();
-    logEnd("discover");
+    timeManager.stop("discover");
+}
 
-    if (options["results-path"]) {
-        writeTime({ discover: createRunTime(startTime, endTime) }, options["results-path"]);
+/**
+ * Discover all files in the given path.
+ *
+ * This function iterates over all files in the 'sources' directory and its subdirectories.
+ * It excludes binary files, empty files, and files that contain no code.
+ * It also counts the number of files that source other files.
+ *
+ * @param rFilesPath - The path to the R files directory
+ * @returns The discovered files
+ */
+async function discoverFiles(rFilesPath: string): Promise<DiscoverData> {
+    const discoverData: DiscoverData = {
+        files: [],
+        binaryFiles: [],
+        emptyFiles: [],
+        nonCodeFiles: [],
+        numberOfSourcingFiles: 0,
+    };
+
+    // TODO: don't expect sources directory
+    for await (const file of globIterate(`${rFilesPath}/sources/**/*.[r|R]`, { absolute: true })) {
+        // Exclude files that are binary
+        if (isBinaryFileSync(file)) {
+            discoverData.binaryFiles.push(file);
+            continue;
+        }
+
+        // Exclude files that are empty
+        const size = getSizeOfFile(file);
+        if (size.sourced.bytes === 0 || size.sourced.nonEmptyLines === 0) {
+            logger.silly(`File ${file} has size 0B or has only empty lines.`);
+            discoverData.emptyFiles.push(file);
+            continue;
+        }
+
+        // Exclude files that contain no code
+        if (size.sourced.codeLines === 0) {
+            logger.silly(`File ${file} has 0 code lines.`);
+            discoverData.nonCodeFiles.push(file);
+            continue;
+        }
+
+        // Count the number of files that source other files
+        if (size.sourced.bytes > size.single.bytes) {
+            discoverData.numberOfSourcingFiles++;
+        }
+
+        // Add non-binary files with a size greater than 0, containing code
+        discoverData.files.push({ path: file, size });
     }
+
+    return discoverData;
+}
+
+/**
+ * Create statistics for the discovered data.
+ *
+ * @param data - The discovered data
+ * @returns The statistics of the discovered data
+ */
+function createDiscoverStats(data: DiscoverData): DiscoverStats {
+    const totalFileCount =
+        data.files.length +
+        data.binaryFiles.length +
+        data.emptyFiles.length +
+        data.nonCodeFiles.length;
+
+    return {
+        totalFileCount: totalFileCount,
+        fileCount: data.files.length,
+        binaryFileCount: data.binaryFiles.length,
+        emptyFileCount: data.emptyFiles.length,
+        nonCodeFileCount: data.nonCodeFiles.length,
+        sourcingFileCount: data.numberOfSourcingFiles,
+    };
 }
 
 /**
@@ -133,6 +163,7 @@ export async function runDiscover(argv: string[]) {
  * @returns The equally distributed files (flattened buckets)
  */
 function equallyDistribute(files: FileInfo[], seed: string): FileInfo[] {
+    // TODO: use a better distribution algorithm
     // Sort the files by size in descending order
     const sortedFiles = files.toSorted(compareFiles);
 

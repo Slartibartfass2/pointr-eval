@@ -1,0 +1,38 @@
+{
+    "$schema": "./profiles.schema.json",
+    "profiles": [
+        {
+            "name": "default",
+            "benchmarkArgs": ["--parser", "tree-sitter"]
+        },
+        {
+            "name": "pointer-analysis",
+            "benchmarkArgs": [
+                "--parser",
+                "tree-sitter",
+                "--runs",
+                "1",
+                "--threshold",
+                "20",
+                "--sampling-strategy",
+                "equidistant",
+                "--per-file-time-limit",
+                "1800000",
+                "--slice",
+                "50"
+            ],
+            "configs": [
+                {
+                    "name": "insensitive",
+                    "benchmarkArgs": []
+                },
+                {
+                    "name": "sensitive",
+                    "benchmarkArgs": ["--enable-pointer-tracking"]
+                }
+            ],
+            "perFileComparison": true,
+            "output": ["json", "latex"]
+        }
+    ]
+}

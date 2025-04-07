@@ -18,5 +18,5 @@
         // "noUncheckedSideEffectImports": true,
         "sourceRoot": "./src"
     },
-    "include": ["src"]
+    "include": ["src", "profiles.json"]
 }

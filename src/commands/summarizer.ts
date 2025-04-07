@@ -1,53 +1,42 @@
 import commandLineArgs, { OptionDefinition } from "command-line-args";
-import { logEnd, logger, logStart } from "../logger";
+import { logger } from "../logger";
 import fs from "fs";
 import path from "path";
-import {
-    assertDirectory,
-    buildFlowr,
-    createRunTime,
-    currentISODate,
-    forkAsync,
-    getRepoInfo,
-    writeTime,
-    statsReviver,
-    iterateFilesInDir,
-} from "../utils";
-import { processSummarizedRunMeasurement, UltimateSlicerStats } from "../flowr-logic";
-import { capitalize, flattenObject, RepoInfo, Times } from "../model";
+import { statsReviver } from "../utils";
+import { processSummarizedRunMeasurement } from "../utils/flowr-logic";
 import assert from "assert";
 import { globIterate } from "glob";
 import readline from "readline";
+import { UltimateSlicerStats } from "@eagleoutice/flowr/benchmark/summarizer/data";
+import { Profile } from "../profile";
+import { PathManager } from "../path-manager";
+import { TimeManager } from "../time-manager";
+import { getRepoInfo, RepoInfos } from "../utils/repo-info";
+import { assertDirectory, iterateFilesInDir, readJsonFile } from "../utils/fs-helper";
+import { buildFlowr, forkAsync } from "../utils/processes";
+import { capitalize, flattenObject } from "../utils/output";
+
+const runDefinitions: OptionDefinition[] = [{ name: "flowr-path", alias: "f", type: String }];
 
 /**
  * Run the summarizer command.
  *
  * Expects the benchmark command to be run. The results of the benchmark are used as input.
- * Runs the summarizer for the field-sensitive and field-insensitive analyses.
- * Stores the results in the `results-path` directory.
+ * Runs the summarizer for each config. Stores the results in the output directory.
  */
-export async function runSummarizer(argv: string[], skipBuild = false) {
-    const runDefinitions: OptionDefinition[] = [
-        { name: "results-path", alias: "i", type: String, defaultValue: "./results" },
-        { name: "flowr-path", alias: "f", type: String },
-    ];
+export async function runSummarizer(
+    argv: string[],
+    profile: Profile,
+    pathManager: PathManager,
+    timeManager: TimeManager,
+    skipBuild = false,
+) {
     const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
 
-    logStart("summarizer");
-    const startTime = Date.now();
+    timeManager.start("summarizer-full");
 
-    const resultsPath = path.resolve(options["results-path"]);
     const flowrPathRaw = options["flowr-path"];
-
-    const doesResultsPathExist = assertDirectory(
-        resultsPath,
-        "The path to the results directory is required. Use the --results-path option.",
-    );
-    if (!doesResultsPathExist) {
-        return;
-    }
-
     const doesFlowrPathExist = assertDirectory(
         flowrPathRaw,
         "The path to the flowr repo is required. Use the --flowr-path option.",
@@ -55,98 +44,52 @@ export async function runSummarizer(argv: string[], skipBuild = false) {
     if (!doesFlowrPathExist) {
         return;
     }
-
     const flowrPath = path.resolve(flowrPathRaw);
-
-    logger.info(`Storing the results in ${resultsPath}`);
-
-    const sensBenchPath = path.join(resultsPath, "sens", "bench");
-    const insensBenchPath = path.join(resultsPath, "insens", "bench");
-
-    // Create output directories
-    const sensPath = path.join(resultsPath, "sens", "summary");
-    fs.mkdirSync(sensPath, { recursive: true });
-    const insensPath = path.join(resultsPath, "insens", "summary");
-    fs.mkdirSync(insensPath, { recursive: true });
-
-    const logSensPath = path.join(resultsPath, "summary-sens.log");
-    fs.writeFileSync(logSensPath, "");
-    const logInsensPath = path.join(resultsPath, "summary-insens.log");
-    fs.writeFileSync(logInsensPath, "");
 
     // Check whether repo info is consistent to assure correctness
     const repoInfo = await getRepoInfo(flowrPath);
-    logger.verbose(`flowr repo info: ${JSON.stringify(repoInfo)}`);
-    const benchRepoInfo = JSON.parse(
-        fs.readFileSync(path.join(resultsPath, "repo-info.json"), "utf8"),
-    ) as { flowr: RepoInfo };
+    const { flowr } = readJsonFile<RepoInfos>(pathManager.getPath("repo-info"));
     assert.deepStrictEqual(
         repoInfo,
-        benchRepoInfo.flowr,
-        "The flowr repo info does not match the benchmark repo info. This may lead to incorrect results.",
+        flowr,
+        "The flowr repo info is not consistent. Please rerun the benchmark command.",
     );
 
-    const summarizerPath = path.join(flowrPath, "dist/src/cli/summarizer-app");
-    const baseArgs = [];
-    const sensArgs = [...baseArgs, "-i", sensBenchPath, "-o", sensPath];
-    const insensArgs = [...baseArgs, "-i", insensBenchPath, "-o", insensPath];
-
-    let buildStart: number | undefined;
-    let buildEnd: number | undefined;
     if (!skipBuild) {
-        buildStart = Date.now();
-        await buildFlowr(flowrPath, resultsPath);
-        buildEnd = Date.now();
+        timeManager.start("build-flowr");
+        await buildFlowr(flowrPath, pathManager.getPath("build-flowr-log"));
+        timeManager.stop("build-flowr");
     }
 
-    // Run the summarizer
-    logger.info(`Running the summarizer for result without pointer analysis - ${currentISODate()}`);
-    logger.verbose(`Insensitive summarizer args: ${insensArgs.join(" ")}`);
-    const insensStart = Date.now();
-    let insensEnd: number;
-    const insensProc = forkAsync(summarizerPath, insensArgs, logInsensPath).then(() => {
-        logger.info(
-            `Finished the summarizer for result without pointer analysis - ${currentISODate()}`,
+    const summarizerPath = path.join(flowrPath, "dist/src/cli/summarizer-app");
+
+    // Run the summarizer for each config
+    const summarizerProcesses: Promise<void>[] = [];
+    for (const config of profile.configs) {
+        const outputPath = pathManager.getConfigOutputPath(config.name, "summarizer");
+        const logPath = pathManager.getConfigLogPath(config.name, "summarizer");
+
+        const args = [
+            "-i",
+            pathManager.getConfigOutputPath(config.name, "benchmark"),
+            "-o",
+            outputPath,
+        ];
+        logger.verbose(`Summarizer args for config '${config.name}': ${args.join(" ")}`);
+
+        timeManager.start(`summarizer-${config.name}`);
+
+        summarizerProcesses.push(
+            forkAsync(summarizerPath, args, logPath)
+                .then(() => summarizeRunsPerFile(outputPath))
+                .then(async () => await writeSummariesToCsv(outputPath))
+                .then(() => timeManager.stop(`summarizer-${config.name}`)),
         );
-        insensEnd = Date.now();
-    });
+    }
 
-    logger.info(`Running the summarizer for result with pointer analysis - ${currentISODate()}`);
-    logger.verbose(`Sensitive summarizer args: ${sensArgs.join(" ")}`);
-    const sensStart = Date.now();
-    let sensEnd: number;
-    const sensProc = forkAsync(summarizerPath, sensArgs, logSensPath).then(() => {
-        logger.info(
-            `Finished the summarizer for result with pointer analysis - ${currentISODate()}`,
-        );
-        sensEnd = Date.now();
-    });
+    await Promise.all(summarizerProcesses);
 
-    await Promise.all([sensProc, insensProc]);
-
-    logger.info(`Summarizing runs per file - ${currentISODate()}`);
-    const perFileStart = Date.now();
-    summarizeRunsPerFile(sensPath);
-    const sensCsv = writeSummariesToCsv(sensPath);
-    summarizeRunsPerFile(insensPath);
-    const insensCsv = writeSummariesToCsv(insensPath);
-    await Promise.all([sensCsv, insensCsv]);
-    const perFileEnd = Date.now();
-    logger.info(`Finished summarizing runs per file - ${currentISODate()}`);
-
-    const endTime = Date.now();
-    logEnd("summarizer");
-
-    const time: Partial<Times> = {
-        summarizer: {
-            ...createRunTime(startTime, endTime),
-            sens: createRunTime(sensStart, sensEnd),
-            insens: createRunTime(insensStart, insensEnd),
-            perFile: createRunTime(perFileStart, perFileEnd),
-        },
-        build: buildStart && buildEnd ? createRunTime(buildStart, buildEnd) : undefined,
-    };
-    writeTime(time, resultsPath);
+    timeManager.stop("summarizer-full");
 }
 
 function summarizeRunsPerFile(dir: string) {

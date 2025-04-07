@@ -10,17 +10,19 @@
     "author": "Slartibartfass2",
     "scripts": {
         "build": "tsc -p .",
-        "start": "node dist/index.js",
+        "start": "node dist/src/index.js",
         "dev": "npm run build && npm start --",
         "lint": "prettier --check . && eslint .",
         "format": "prettier --write .",
         "discover": "npm run dev discover --",
         "benchmark": "npm run dev benchmark --",
         "summarizer": "npm run dev summarizer --",
-        "eval": "npm run dev eval --",
-        "full": "npm run dev full --"
+        "comparison": "npm run dev comparison --",
+        "full": "npm run dev full --",
+        "validate-profiles": "ajv validate -s profiles.schema.json profiles.json"
     },
     "devDependencies": {
+        "@jirutka/ajv-cli": "^6.0.0",
         "@types/command-line-args": "^5.2.3",
         "@types/eslint": "^9.6.1",
         "@types/eslint-config-prettier": "^6.11.3",
@@ -36,7 +38,7 @@
         "typescript-eslint": "^8.23.0"
     },
     "dependencies": {
-        "@eagleoutice/flowr": "^2.2.10",
+        "@eagleoutice/flowr": "^2.2.12",
         "command-line-args": "^6.0.1",
         "format-duration": "^3.0.2",
         "glob": "^11.0.1",

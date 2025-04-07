@@ -22,10 +22,10 @@ npm run benchmark -- -i <path-to-discovered-files>.json -f <path-to-flowr-repo> 
 npm run summarizer -- -i <path-to-results-directory> -f <path-to-flowr-repo>
 ```
 
-- `eval`: Evaluates the pointer analysis results.
+- `comparison`: Compares the pointer analysis results.
 
 ```bash
-npm run eval -- -i <path-to-results-directory> -o <path-to-output-directory>
+npm run comparison -- -i <path-to-results-directory> -o <path-to-output-directory>
 ```
 
 - `full`: Runs the discover, benchmark, summarizer, and eval commands in sequence.

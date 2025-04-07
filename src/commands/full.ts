@@ -1,97 +1,67 @@
 import commandLineArgs, { OptionDefinition } from "command-line-args";
-import { logEnd, logger, logStart } from "../logger";
+import { logger } from "../logger";
 import { runBenchmark } from "./benchmark";
 import { runSummarizer } from "./summarizer";
-import { runEval } from "./evaluation";
-import path from "path";
-import {
-    createRunTime,
-    ensureDirectoryExists,
-    printTimes,
-    reconstructObject,
-    writeTime,
-} from "../utils";
-import fs from "fs";
 import { runDiscover } from "./discover";
 import assert from "assert";
-import { flattenObject, objectToLaTeX, Times } from "../model";
+import { Profile } from "../profile";
+import { PathManager } from "../path-manager";
+import { TimeManager } from "../time-manager";
+import { runComparison } from "./comparison";
+import { generateOutput } from "../utils/output";
 
-export async function runFull(argv: string[]) {
-    const runDefinitions: OptionDefinition[] = [
-        { name: "ssoc-path", alias: "i", type: String },
-        { name: "flowr-path", alias: "f", type: String },
-        { name: "output-path", alias: "o", type: String, defaultValue: "./results" },
-        { name: "skip-discover", type: Boolean, defaultValue: false },
-        { name: "files-path", type: String },
-        { name: "seed", alias: "s", type: String, defaultValue: "U2xhcnRpYmFydGZhc3My" },
-        { name: "limit", alias: "l", type: String },
-    ];
+const runDefinitions: OptionDefinition[] = [
+    { name: "ssoc-path", alias: "i", type: String },
+    { name: "flowr-path", alias: "f", type: String },
+    { name: "skip-discover", type: Boolean, defaultValue: false },
+    { name: "limit", alias: "l", type: String },
+];
+
+export async function runFull(
+    argv: string[],
+    profile: Profile,
+    pathManager: PathManager,
+    timeManager: TimeManager,
+) {
     const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
 
-    if (options["skip-discover"]) {
-        assert(options["files-path"], "If skip-discover is set, files-path must be provided");
-    } else {
+    if (!options["skip-discover"]) {
         assert(options["ssoc-path"], "If skip-discover is not set, ssoc-path must be provided");
     }
 
-    logStart("full");
-    const startTime = Date.now();
+    timeManager.start("full");
 
-    const outputPathRaw = options["output-path"];
-    ensureDirectoryExists(outputPathRaw);
-    const outputPath = path.resolve(outputPathRaw);
+    // logger.info(`Deleting contents of ${outputPath}`);
+    // fs.rmSync(outputPath, { recursive: true, force: true });
+    // fs.mkdirSync(outputPath);
 
-    logger.info(`Deleting contents of ${outputPath}`);
-    fs.rmSync(outputPath, { recursive: true, force: true });
-    fs.mkdirSync(outputPath);
-
-    const filesPath =
-        (options["files-path"] as string | undefined) || path.join(outputPath, "files.json");
     if (!options["skip-discover"]) {
-        await runDiscover([
-            "--ssoc-path",
-            options["ssoc-path"],
-            "--output-path",
-            filesPath,
-            "--results-path",
-            outputPath,
-            "--seed",
-            options.seed,
-        ]);
+        await runDiscover(["--ssoc-path", options["ssoc-path"]], profile, pathManager, timeManager);
     }
 
-    await runBenchmark([
-        "--files-path",
-        filesPath,
-        "--flowr-path",
-        options["flowr-path"],
-        "--output-path",
-        outputPath,
-        ...(options.limit ? ["--limit", options.limit] : []),
-    ]);
+    await runBenchmark(
+        [
+            "--flowr-path",
+            options["flowr-path"],
+            ...(options.limit ? ["--limit", options.limit] : []),
+        ],
+        profile,
+        pathManager,
+        timeManager,
+    );
 
     await runSummarizer(
-        ["--results-path", outputPath, "--flowr-path", options["flowr-path"]],
+        ["--flowr-path", options["flowr-path"]],
+        profile,
+        pathManager,
+        timeManager,
         true,
     );
 
-    await runEval(["--results-path", outputPath]);
+    await runComparison(["--generate-output", "false"], profile, pathManager, timeManager);
 
-    const endTime = Date.now();
-    logEnd("full");
+    timeManager.stop("full");
 
-    writeTime(
-        {
-            full: createRunTime(startTime, endTime),
-        },
-        outputPath,
-    );
-
-    const times = JSON.parse(fs.readFileSync(path.join(outputPath, "times.json"), "utf8")) as Times;
-    printTimes(times);
-
-    const filteredTimes = flattenObject(times).filter(([key]) => key.includes("durationInMs"));
-    const latex = "\n" + objectToLaTeX({ times: reconstructObject(filteredTimes) });
-    fs.appendFileSync(path.join(outputPath, "eval-stats.tex"), latex);
+    generateOutput(profile, pathManager, timeManager);
 }

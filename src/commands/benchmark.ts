@@ -1,52 +1,40 @@
 import commandLineArgs, { OptionDefinition } from "command-line-args";
-import { logEnd, logger, logStart } from "../logger";
+import { logger } from "../logger";
 import fs from "fs";
 import path from "path";
-import {
-    assertDirectory,
-    assertFile,
-    buildFlowr,
-    createRunTime,
-    currentISODate,
-    ensureDirectoryExists,
-    forkAsync,
-    getRepoInfo,
-    onFilesInBothPaths,
-    writeTime,
-} from "../utils";
-import { DiscoverData, BenchConfig, Times, RepoInfos } from "../model";
+import { DiscoverData } from "../model/discover-data";
+import { Profile } from "../profile";
+import { PathManager } from "../path-manager";
+import { TimeManager } from "../time-manager";
+import { assertDirectory, onFilesInPaths, readJsonFile, writeJsonFile } from "../utils/fs-helper";
+import { getRepoInfo, RepoInfos } from "../utils/repo-info";
+import { buildFlowr, forkAsync } from "../utils/processes";
+
+const runDefinitions: OptionDefinition[] = [
+    { name: "flowr-path", alias: "f", type: String },
+    { name: "limit", alias: "l", type: String },
+];
 
 /**
  * Run the benchmark command.
  *
  * Expects the flowr repo to be cloned and its path provided.
  * Expects the input file to be a JSON file with the paths of the files to analyze (Result of the discover command).
- * Runs the benchmark with and without pointer analysis. Stores the results in the output directory.
+ * Runs the benchmark for each config. Stores the results in the output directory.
  */
-export async function runBenchmark(argv: string[]) {
-    const runDefinitions: OptionDefinition[] = [
-        { name: "files-path", alias: "i", type: String },
-        { name: "flowr-path", alias: "f", type: String },
-        { name: "output-path", alias: "o", type: String, defaultValue: "./results" },
-        { name: "limit", alias: "l", type: String },
-    ];
+export async function runBenchmark(
+    argv: string[],
+    profile: Profile,
+    pathManager: PathManager,
+    timeManager: TimeManager,
+) {
     const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
 
-    logStart("benchmark");
-    const startTime = Date.now();
+    timeManager.start("benchmark-full");
 
-    const filesPathRaw = options["files-path"];
+    // Assure that the flowr path exists
     const flowrPathRaw = options["flowr-path"];
-
-    const doesFilesPathExist = assertFile(
-        filesPathRaw,
-        "The path to the input file is required. Use the --files-path option.",
-    );
-    if (!doesFilesPathExist) {
-        return;
-    }
-
     const doesFlowrPathExist = assertDirectory(
         flowrPathRaw,
         "The path to the flowr repo is required. Use the --flowr-path option.",
@@ -54,35 +42,17 @@ export async function runBenchmark(argv: string[]) {
     if (!doesFlowrPathExist) {
         return;
     }
-
-    const filesPath = path.resolve(filesPathRaw);
     const flowrPath = path.resolve(flowrPathRaw);
 
-    const outputPath = path.resolve(options["output-path"]);
-    ensureDirectoryExists(outputPath);
-
-    logger.info(`Storing the results in ${outputPath}`);
-
-    // Create output directories
-    const sensPath = path.join(outputPath, "sens", "bench");
-    fs.mkdirSync(sensPath, { recursive: true });
-    const insensPath = path.join(outputPath, "insens", "bench");
-    fs.mkdirSync(insensPath, { recursive: true });
-
-    const logSensPath = path.join(outputPath, "bench-sens.log");
-    fs.writeFileSync(logSensPath, "");
-    const logInsensPath = path.join(outputPath, "bench-insens.log");
-    fs.writeFileSync(logInsensPath, "");
-
-    const discoverData = JSON.parse(fs.readFileSync(filesPath, "utf8")) as DiscoverData;
+    // Read files from the discover step
+    const discoverData = readJsonFile<DiscoverData>(pathManager.getPath("discover-output"));
     logger.verbose(
-        `Using discover data: repoInfo=${JSON.stringify(discoverData.repo)}, files=[${discoverData.files.length} R files]`,
+        `Using discover data with ${discoverData.files.length} files, ${discoverData.binaryFiles.length} binary files, ${discoverData.emptyFiles.length} empty files, ${discoverData.nonCodeFiles.length} non-code files, and ${discoverData.numberOfSourcingFiles} sourcing files`,
     );
 
     // Write discover data to the output directory to have all at one place
-    const benchFilesPath = path.join(outputPath, "bench-input.json");
-    const benchFiles = discoverData.files.slice(0, options.limit).map((f) => f.path);
-    fs.writeFileSync(benchFilesPath, JSON.stringify(benchFiles));
+    const benchmarkInputFiles = discoverData.files.slice(0, options.limit).map((f) => f.path);
+    writeJsonFile(pathManager.getPath("benchmark-input"), benchmarkInputFiles);
 
     if (options.limit) {
         logger.warn(`Limiting the number of files to ${options.limit}`);
@@ -93,119 +63,77 @@ export async function runBenchmark(argv: string[]) {
     logger.verbose(`flowr repo info: ${JSON.stringify(flowrRepoInfo)}`);
     const pointrEvalInfo = await getRepoInfo(process.cwd());
     logger.verbose(`pointr-eval repo info: ${JSON.stringify(pointrEvalInfo)}`);
-    const repoInfos: RepoInfos = {
-        flowr: flowrRepoInfo,
-        ssoc: discoverData.repo,
-        ssocFileCount: discoverData.files.length,
-        ssocBinaryFileCount: discoverData.binaryFiles.length,
-        ssocEmptyFileCount: discoverData.emptyFiles.length,
-        ssocNonCodeFileCount: discoverData.nonCodeFiles.length,
-        ssocNumberOfSourcingFiles: discoverData.numberOfSourcingFiles,
-        discoverSeed: discoverData.seed,
-        pointrEval: pointrEvalInfo,
-    };
-    fs.writeFileSync(path.join(outputPath, "repo-info.json"), JSON.stringify(repoInfos));
+    const repoInfos = readJsonFile<RepoInfos>(pathManager.getPath("repo-info"));
+    repoInfos.flowr = flowrRepoInfo;
+    repoInfos.pointrEval = pointrEvalInfo;
+    writeJsonFile(pathManager.getPath("repo-info"), repoInfos);
+
+    timeManager.start("build-flowr");
+    await buildFlowr(flowrPath, pathManager.getPath("build-flowr-log"));
+    timeManager.stop("build-flowr");
 
     const benchmarkPath = path.join(flowrPath, "dist/src/cli/benchmark-app");
-    const benchConfig: BenchConfig = {
-        sliceSampling: 50,
-        timeLimitInMinutes: 30,
-        runs: 1,
-        threshold: 20,
-        samplingStrategy: "equidistant",
-    };
-    const baseArgs = [
-        // "--max-file-slices",
-        //"4230", // 99% of the files have less than 4231 slices
-        "--parser",
-        "tree-sitter",
-        // "-l",
-        // "3300", // file limit
-        "-s",
-        `${benchConfig.sliceSampling}`,
-        "--sampling-strategy",
-        benchConfig.samplingStrategy,
-        "--per-file-time-limit",
-        `${benchConfig.timeLimitInMinutes * 60000}`,
-        "-i",
-        benchFilesPath,
-        "-r", // runs
-        `${benchConfig.runs}`,
-        "-t", // threshold (default 75)
-        `${benchConfig.threshold}`,
-    ];
-    const sensArgs = [...baseArgs, "-o", sensPath, "--enable-pointer-tracking"];
-    const insensArgs = [...baseArgs, "-o", insensPath];
+    const baseArgs = ["-i", pathManager.getPath("benchmark-input"), ...profile.benchmarkArgs];
 
-    fs.writeFileSync(path.join(outputPath, "bench-config.json"), JSON.stringify(benchConfig));
+    // Run the benchmark for each config
+    for (const config of profile.configs) {
+        const configResultsPath = pathManager.getConfigOutputPath(config.name, "benchmark");
+        const logPath = pathManager.getConfigLogPath(config.name, "benchmark");
 
-    const startTimeBuild = Date.now();
-    await buildFlowr(flowrPath, outputPath);
-    const endTimeBuild = Date.now();
+        const args = [...baseArgs, ...config.benchmarkArgs, "-o", configResultsPath];
+        logger.verbose(`Benchmark args for config '${config.name}': ${args.join(" ")}`);
 
-    // Run the benchmark
-    logger.info(`Running the benchmark without pointer analysis - ${currentISODate()}`);
-    logger.verbose(`Insensitive benchmark args: ${insensArgs.join(" ")}`);
-    const insensStart = Date.now();
-    let insensEnd: number;
-    const insensProc = forkAsync(benchmarkPath, insensArgs, logInsensPath).then(() => {
-        logger.info(`Finished the benchmark without pointer analysis - ${currentISODate()}`);
-        insensEnd = Date.now();
-    });
+        // Run benchmark with config
+        timeManager.start(`benchmark-${config.name}`);
+        await forkAsync(benchmarkPath, args, logPath).then(() => {
+            timeManager.stop(`benchmark-${config.name}`);
+        });
+    }
 
-    // TODO: check whether this affects the benchmark results
-    await insensProc;
+    // Delete results which aren't in all results
+    if (profile.configs.length > 1) {
+        timeManager.start("benchmark-cleanup");
+        removeUniqueFiles(pathManager);
+        timeManager.stop("benchmark-cleanup");
+    }
 
-    logger.info(`Running the benchmark with pointer analysis - ${currentISODate()}`);
-    logger.verbose(`Sensitive benchmark args: ${sensArgs.join(" ")}`);
-    const sensStart = Date.now();
-    let sensEnd: number;
-    const sensProc = forkAsync(benchmarkPath, sensArgs, logSensPath).then(() => {
-        logger.info(`Finished the benchmark with pointer analysis - ${currentISODate()}`);
-        sensEnd = Date.now();
-    });
-
-    await Promise.all([sensProc, insensProc]);
-
-    // Delete results which aren't in both results
-    logger.info(`Removing results which are not in both runs - ${currentISODate()}`);
-    removeSingleFiles(insensPath, sensPath);
-    logger.info(`Finished removing results which are not in both runs - ${currentISODate()}`);
-
-    const endTime = Date.now();
-    logEnd("benchmark");
-
-    const time: Partial<Times> = {
-        benchmark: {
-            ...createRunTime(startTime, endTime),
-            insens: createRunTime(insensStart, insensEnd),
-            sens: createRunTime(sensStart, sensEnd),
-        },
-        build: createRunTime(startTimeBuild, endTimeBuild),
-    };
-    writeTime(time, outputPath);
+    timeManager.stop("benchmark-full");
 }
 
-function removeSingleFiles(insensPath: string, sensPath: string) {
-    let insensRemoved = 0;
-    let sensRemoved = 0;
-    const { single } = onFilesInBothPaths(
-        insensPath,
-        sensPath,
+/**
+ * Remove files which are unique to one of the runs.
+ *
+ * This is needed because the benchmark app does not remove files which are not in all runs.
+ * This function removes files which are not in all runs.
+ *
+ * @param pathManager The path manager
+ */
+function removeUniqueFiles(pathManager: PathManager) {
+    const allConfigOutputPaths = pathManager.getAllConfigOutputPaths("benchmark");
+    const removedFiles = new Map<string, number>();
+
+    const { notInAll } = onFilesInPaths(
+        allConfigOutputPaths.map((config) => config.path),
         (fileName) => fileName.endsWith(".json"),
-        (_, insensPath, sensPath) => {
-            if (insensPath) {
-                insensRemoved++;
-                fs.rmSync(insensPath);
-            }
-            if (sensPath) {
-                sensRemoved++;
-                fs.rmSync(sensPath);
+        (_, filteredPaths) => {
+            for (const path of filteredPaths) {
+                fs.rmSync(path);
+                removedFiles.set(path, (removedFiles.get(path) ?? 0) + 1);
             }
         },
         "onFilesInSinglePath",
     );
-    logger.verbose(
-        `Removed ${single} results which are not in both runs (insens: ${insensRemoved}, sens: ${sensRemoved})`,
-    );
+
+    const logs = [];
+    const counts = removedFiles.values().toArray();
+    for (let i = 0; i < removedFiles.size; i++) {
+        const removedFilesCount = counts[i];
+        logs.push(`- ${allConfigOutputPaths[i].config}: ${removedFilesCount} files`);
+    }
+
+    let log = `Removed ${notInAll} results which are not in all runs`;
+    if (logs.length > 0) {
+        log += `:\n${logs.join("\n")}`;
+    }
+    logger.verbose(log);
 }

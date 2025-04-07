@@ -1,6 +1,4 @@
 import * as winston from "winston";
-import { Command } from "./cli";
-import { currentISODate } from "./utils";
 
 export const logger = winston.createLogger({
     level: "info",
@@ -13,11 +11,3 @@ export const logger = winston.createLogger({
         new winston.transports.File({ filename: "error.log", level: "error" }),
     ],
 });
-
-export function logStart(command: Command) {
-    logger.info(`Starting pointr-${command} - ${currentISODate()}`);
-}
-
-export function logEnd(command: Command) {
-    logger.info(`Finished pointr-${command} - ${currentISODate()}`);
-}
