@@ -106,7 +106,7 @@ export async function runBenchmark(
  * This is needed because the benchmark app does not remove files which are not in all runs.
  * This function removes files which are not in all runs.
  *
- * @param pathManager The path manager
+ * @param pathManager - The path manager
  */
 function removeUniqueFiles(pathManager: PathManager) {
     const allConfigOutputPaths = pathManager.getAllConfigOutputPaths("benchmark");
