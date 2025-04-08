@@ -18,6 +18,7 @@ const optionDefinitions: OptionDefinition[] = [
     { name: "debug", alias: "d", type: Boolean },
     { name: "profile", alias: "p", type: String },
     { name: "output-path", alias: "o", type: String, defaultValue: "./results" },
+    { name: "force", type: Boolean },
 ];
 
 export type Command = "comparison" | "benchmark" | "discover" | "summarizer" | "full";
@@ -71,9 +72,14 @@ export class Cli {
             ensureDirectoryExists(outputPath);
         }
         if (!isDirectoryEmpty(outputPath)) {
-            logger.error(`Output path ${outputPath} is not empty.`);
-            // TODO: Add option to overwrite
-            return;
+            if (this.parsedOptions.force) {
+                fs.rmSync(outputPath, { recursive: true, force: true });
+            } else {
+                logger.error(
+                    `Output path ${outputPath} is not empty. Please specify a different path or use --force to overwrite.`,
+                );
+                return;
+            }
         }
 
         const pathManager = new PathManager(profile);
