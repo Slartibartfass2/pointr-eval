@@ -5,10 +5,8 @@ import fs from "fs";
 import path from "path";
 import { DiscoverData, DiscoverStats, FileInfo, FileSize, Size } from "../model/discover-data";
 import { isBinaryFileSync } from "isbinaryfile";
-import seedrandom from "seedrandom";
 import { PathManager } from "../path-manager";
 import { TimeManager } from "../time-manager";
-import { Profile } from "../profile";
 import { assertDirectory, writeJsonFile } from "../utils/fs-helper";
 import { getRepoInfo, RepoInfos } from "../utils/repo-info";
 
@@ -23,7 +21,6 @@ const runDefinitions: OptionDefinition[] = [{ name: "ssoc-path", alias: "i", typ
  */
 export async function runDiscover(
     argv: string[],
-    profile: Profile,
     pathManager: PathManager,
     timeManager: TimeManager,
 ) {
@@ -48,7 +45,7 @@ export async function runDiscover(
 
     // Discover all files in the SSOC repo
     const data = await discoverFiles(ssocPath);
-    data.files = equallyDistribute(data.files, profile.randomSeed);
+    data.files = equallyDistribute(data.files, compareFiles);
 
     const stats = createDiscoverStats(data);
     writeJsonFile(pathManager.getPath("discover-stats"), stats);
@@ -154,41 +151,6 @@ function createDiscoverStats(data: DiscoverData): DiscoverStats {
 }
 
 /**
- * Equally distribute the files.
- *
- * Given a list of files, this function sorts the files by size in descending order and distributes them equally across 100 buckets.
- * The files are then distributed in a zig-zag pattern across the buckets.
- *
- * @param files - The list of files to distribute
- * @returns The equally distributed files (flattened buckets)
- */
-function equallyDistribute(files: FileInfo[], seed: string): FileInfo[] {
-    // TODO: use a better distribution algorithm
-    // Sort the files by size in descending order
-    const sortedFiles = files.toSorted(compareFiles);
-
-    // Create buckets for the files
-    const numberOfBuckets = 100;
-    const buckets: FileInfo[][] = [];
-    for (let i = 0; i < numberOfBuckets; i++) {
-        buckets.push([]);
-    }
-
-    // Distribute the files in a zig-zag pattern
-    for (let i = 0; i < sortedFiles.length; i++) {
-        const element = sortedFiles[i];
-        const dir = (i / (numberOfBuckets + 1)) % 2;
-        const bucketIndex =
-            dir === 0 ? i % numberOfBuckets : numberOfBuckets - 1 - (i % numberOfBuckets);
-
-        buckets[bucketIndex].push(element);
-    }
-
-    const random = seedrandom(seed);
-    return buckets.flatMap((bucket) => bucket.toSorted(() => random() - 0.5));
-}
-
-/**
  * Get the size of the file and all files that are sourced in the file.
  *
  * This tries to estimate the effort required to analyze the file.
@@ -274,4 +236,49 @@ function compareFiles(a: FileInfo, b: FileInfo) {
         return a.path.localeCompare(b.path);
     }
     return compare;
+}
+
+/**
+ * Equally distribute the items according to their values.
+ *
+ * @param items - The items to distribute
+ * @param compare - The function to compare the items
+ * @returns The equally distributed items
+ */
+function equallyDistribute<T>(items: T[], compare: (a: T, b: T) => number): T[] {
+    // Sort the items by size in descending order
+    const sortedFiles = items.toSorted(compare);
+
+    let result = [sortedFiles.shift(), sortedFiles.shift()];
+    if (sortedFiles.length === 0) {
+        return result;
+    }
+
+    while (sortedFiles.length > 0) {
+        const a = [];
+        const insertPart = [];
+        const length1 = Math.min(result.length - 1, sortedFiles.length);
+        for (let i = 0; i < length1; i++) {
+            insertPart.push(sortedFiles.shift());
+        }
+        const length = result.length * 2 - 1;
+        let skip = result.length - 1 - insertPart.length;
+        for (let i = 0; i < length; i++) {
+            let insert: T;
+            if (i % 2 === 0) {
+                insert = result.shift();
+            } else {
+                if (skip > 0) {
+                    skip--;
+                    continue;
+                }
+                insert = insertPart.pop();
+            }
+            if (insert) {
+                a.push(insert);
+            }
+        }
+        result = a;
+    }
+    return result;
 }

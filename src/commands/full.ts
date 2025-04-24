@@ -37,7 +37,7 @@ export async function runFull(
     // fs.mkdirSync(outputPath);
 
     if (!options["skip-discover"]) {
-        await runDiscover(["--ssoc-path", options["ssoc-path"]], profile, pathManager, timeManager);
+        await runDiscover(["--ssoc-path", options["ssoc-path"]], pathManager, timeManager);
     }
 
     await runBenchmark(

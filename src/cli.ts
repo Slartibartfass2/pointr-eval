@@ -87,7 +87,7 @@ export class Cli {
         const timeManager = new TimeManager(outputPath);
 
         if (this.parsedOptions.name === "discover") {
-            await runDiscover(this.argv, profile, pathManager, timeManager);
+            await runDiscover(this.argv, pathManager, timeManager);
         } else if (this.parsedOptions.name === "benchmark") {
             await runBenchmark(this.argv, profile, pathManager, timeManager);
         } else if (this.parsedOptions.name === "summarizer") {
