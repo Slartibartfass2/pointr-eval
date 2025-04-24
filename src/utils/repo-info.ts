@@ -1,11 +1,11 @@
 import { execAsync } from "./processes";
 
 /**
- * Repository information for Flowr, SSOC, and PointrEval.
+ * Repository information for flowr, the source repo, and pointr-eval.
  */
 export interface RepoInfos {
     flowr: RepoInfo;
-    ssoc: RepoInfo;
+    source: RepoInfo;
     pointrEval: RepoInfo;
 }
 

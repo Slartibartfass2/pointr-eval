@@ -1,4 +1,4 @@
-import commandLineArgs, { OptionDefinition } from "command-line-args";
+import commandLineArgs from "command-line-args";
 import { logger } from "../logger";
 import fs from "fs";
 import path from "path";
@@ -15,8 +15,7 @@ import { getRepoInfo, RepoInfos } from "../utils/repo-info";
 import { assertDirectory, iterateFilesInDir, readJsonFile } from "../utils/fs-helper";
 import { buildFlowr, forkAsync } from "../utils/processes";
 import { capitalize, flattenObject } from "../utils/output";
-
-const runDefinitions: OptionDefinition[] = [{ name: "flowr-path", alias: "f", type: String }];
+import { FLOWR_PATH_FLAG, summarizerOptions } from "../options";
 
 /**
  * Run the summarizer command.
@@ -31,15 +30,15 @@ export async function runSummarizer(
     timeManager: TimeManager,
     skipBuild = false,
 ) {
-    const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
+    const options = commandLineArgs(summarizerOptions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
 
     timeManager.start("summarizer-full");
 
-    const flowrPathRaw = options["flowr-path"];
+    const flowrPathRaw = options[FLOWR_PATH_FLAG];
     const doesFlowrPathExist = assertDirectory(
         flowrPathRaw,
-        "The path to the flowr repo is required. Use the --flowr-path option.",
+        `The path to the flowr repo is required. Use the --${FLOWR_PATH_FLAG} option.`,
     );
     if (!doesFlowrPathExist) {
         return;

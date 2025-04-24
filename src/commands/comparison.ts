@@ -1,4 +1,4 @@
-import commandLineArgs, { OptionDefinition } from "command-line-args";
+import commandLineArgs from "command-line-args";
 import { logger } from "../logger";
 import path from "path";
 import { readUltimateStats, writeUltimateStats } from "../utils";
@@ -9,10 +9,7 @@ import { TimeManager } from "../time-manager";
 import { ensureFileDirectoryExists, onFilesInPaths, writeJsonFile } from "../utils/fs-helper";
 import { summarizeErrors } from "../utils/errors";
 import { generateOutput } from "../utils/output";
-
-const runDefinitions: OptionDefinition[] = [
-    { name: "generate-output", type: Boolean, defaultValue: true },
-];
+import { comparisonOptions } from "../options";
 
 /**
  * Run the comparison command.
@@ -26,7 +23,7 @@ export async function runComparison(
     pathManager: PathManager,
     timeManager: TimeManager,
 ) {
-    const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
+    const options = commandLineArgs(comparisonOptions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
 
     timeManager.start("comparison-full");

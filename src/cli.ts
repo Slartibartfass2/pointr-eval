@@ -1,4 +1,4 @@
-import commandLineArgs, { CommandLineOptions, OptionDefinition } from "command-line-args";
+import commandLineArgs, { CommandLineOptions } from "command-line-args";
 import { logger } from "./logger";
 import { runComparison } from "./commands/comparison";
 import { runBenchmark } from "./commands/benchmark";
@@ -11,15 +11,7 @@ import { TimeManager } from "./time-manager";
 import { ensureDirectoryExists, isDirectoryEmpty } from "./utils/fs-helper";
 import path from "path";
 import fs from "fs";
-
-const optionDefinitions: OptionDefinition[] = [
-    { name: "name", defaultOption: true, type: String },
-    { name: "verbose", alias: "v", type: Boolean },
-    { name: "debug", alias: "d", type: Boolean },
-    { name: "profile", alias: "p", type: String },
-    { name: "output-path", alias: "o", type: String, defaultValue: "./results" },
-    { name: "force", type: Boolean },
-];
+import { mainOptions } from "./options";
 
 export type Command = "comparison" | "benchmark" | "discover" | "summarizer" | "full";
 const supportedCommands = ["comparison", "benchmark", "discover", "summarizer", "full"];
@@ -30,7 +22,7 @@ export class Cli {
     argv: string[];
 
     constructor() {
-        this.parsedOptions = commandLineArgs(optionDefinitions, { stopAtFirstUnknown: true });
+        this.parsedOptions = commandLineArgs(mainOptions, { stopAtFirstUnknown: true });
         this.argv = this.parsedOptions._unknown || [];
 
         if (this.parsedOptions.debug) {

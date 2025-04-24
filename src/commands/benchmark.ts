@@ -1,4 +1,4 @@
-import commandLineArgs, { OptionDefinition } from "command-line-args";
+import commandLineArgs from "command-line-args";
 import { logger } from "../logger";
 import fs from "fs";
 import path from "path";
@@ -9,11 +9,7 @@ import { TimeManager } from "../time-manager";
 import { assertDirectory, onFilesInPaths, readJsonFile, writeJsonFile } from "../utils/fs-helper";
 import { getRepoInfo, RepoInfos } from "../utils/repo-info";
 import { buildFlowr, forkAsync } from "../utils/processes";
-
-const runDefinitions: OptionDefinition[] = [
-    { name: "flowr-path", alias: "f", type: String },
-    { name: "limit", alias: "l", type: String },
-];
+import { benchmarkOptions, FLOWR_PATH_FLAG } from "../options";
 
 /**
  * Run the benchmark command.
@@ -28,16 +24,16 @@ export async function runBenchmark(
     pathManager: PathManager,
     timeManager: TimeManager,
 ) {
-    const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
+    const options = commandLineArgs(benchmarkOptions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
 
     timeManager.start("benchmark-full");
 
     // Assure that the flowr path exists
-    const flowrPathRaw = options["flowr-path"];
+    const flowrPathRaw = options[FLOWR_PATH_FLAG];
     const doesFlowrPathExist = assertDirectory(
         flowrPathRaw,
-        "The path to the flowr repo is required. Use the --flowr-path option.",
+        `The path to the flowr repo is required. Use the --${FLOWR_PATH_FLAG} option.`,
     );
     if (!doesFlowrPathExist) {
         return;

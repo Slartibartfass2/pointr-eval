@@ -1,4 +1,4 @@
-import commandLineArgs, { OptionDefinition } from "command-line-args";
+import commandLineArgs from "command-line-args";
 import { logger } from "../logger";
 import { runBenchmark } from "./benchmark";
 import { runSummarizer } from "./summarizer";
@@ -9,13 +9,7 @@ import { PathManager } from "../path-manager";
 import { TimeManager } from "../time-manager";
 import { runComparison } from "./comparison";
 import { generateOutput } from "../utils/output";
-
-const runDefinitions: OptionDefinition[] = [
-    { name: "ssoc-path", alias: "i", type: String },
-    { name: "flowr-path", alias: "f", type: String },
-    { name: "skip-discover", type: Boolean, defaultValue: false },
-    { name: "limit", alias: "l", type: String },
-];
+import { FLOWR_PATH_FLAG, fullOptions, SOURCE_PATH_FLAG } from "../options";
 
 export async function runFull(
     argv: string[],
@@ -23,11 +17,14 @@ export async function runFull(
     pathManager: PathManager,
     timeManager: TimeManager,
 ) {
-    const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
+    const options = commandLineArgs(fullOptions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
 
     if (!options["skip-discover"]) {
-        assert(options["ssoc-path"], "If skip-discover is not set, ssoc-path must be provided");
+        assert(
+            options[SOURCE_PATH_FLAG],
+            `If skip-discover is not set, '${SOURCE_PATH_FLAG}'  must be provided`,
+        );
     }
 
     timeManager.start("full");
@@ -37,13 +34,17 @@ export async function runFull(
     // fs.mkdirSync(outputPath);
 
     if (!options["skip-discover"]) {
-        await runDiscover(["--ssoc-path", options["ssoc-path"]], pathManager, timeManager);
+        await runDiscover(
+            [`--${SOURCE_PATH_FLAG}`, options[SOURCE_PATH_FLAG]],
+            pathManager,
+            timeManager,
+        );
     }
 
     await runBenchmark(
         [
-            "--flowr-path",
-            options["flowr-path"],
+            `--${FLOWR_PATH_FLAG}`,
+            options[FLOWR_PATH_FLAG],
             ...(options.limit ? ["--limit", options.limit] : []),
         ],
         profile,
@@ -52,7 +53,7 @@ export async function runFull(
     );
 
     await runSummarizer(
-        ["--flowr-path", options["flowr-path"]],
+        [`--${FLOWR_PATH_FLAG}`, options[FLOWR_PATH_FLAG]],
         profile,
         pathManager,
         timeManager,

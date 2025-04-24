@@ -1,4 +1,4 @@
-import commandLineArgs, { OptionDefinition } from "command-line-args";
+import commandLineArgs from "command-line-args";
 import { logger } from "../logger";
 import { globIterate } from "glob";
 import fs from "fs";
@@ -9,8 +9,7 @@ import { PathManager } from "../path-manager";
 import { TimeManager } from "../time-manager";
 import { assertDirectory, writeJsonFile } from "../utils/fs-helper";
 import { getRepoInfo, RepoInfos } from "../utils/repo-info";
-
-const runDefinitions: OptionDefinition[] = [{ name: "ssoc-path", alias: "i", type: String }];
+import { discoverOptions, SOURCE_PATH_FLAG } from "../options";
 
 /**
  * Run the discover command.
@@ -24,27 +23,27 @@ export async function runDiscover(
     pathManager: PathManager,
     timeManager: TimeManager,
 ) {
-    const options = commandLineArgs(runDefinitions, { argv, stopAtFirstUnknown: true });
+    const options = commandLineArgs(discoverOptions, { argv, stopAtFirstUnknown: true });
     logger.debug(`Parsed options: ${JSON.stringify(options)}`);
 
     timeManager.start("discover");
 
-    const ssocPath = options["ssoc-path"];
-    const doesSsocPathExist = assertDirectory(
-        ssocPath,
-        "The path to the SSOC repo is required. Use the --ssoc-path option.",
+    const sourcePath = options[SOURCE_PATH_FLAG];
+    const doesSourcePathExist = assertDirectory(
+        sourcePath,
+        `The path to the source repo is required. Use the --${SOURCE_PATH_FLAG} option.`,
     );
-    if (!doesSsocPathExist) {
+    if (!doesSourcePathExist) {
         return;
     }
 
     // Write the repo info to the output directory
-    const repoInfos: Pick<RepoInfos, "ssoc"> = { ssoc: await getRepoInfo(ssocPath) };
-    logger.verbose(`ssoc-data repo info: ${JSON.stringify(repoInfos.ssoc)}`);
+    const repoInfos: Pick<RepoInfos, "source"> = { source: await getRepoInfo(sourcePath) };
+    logger.verbose(`source repo info: ${JSON.stringify(repoInfos.source)}`);
     writeJsonFile<RepoInfos>(pathManager.getPath("repo-info"), repoInfos as RepoInfos);
 
-    // Discover all files in the SSOC repo
-    const data = await discoverFiles(ssocPath);
+    // Discover all files in the source repo
+    const data = await discoverFiles(sourcePath);
     data.files = equallyDistribute(data.files, compareFiles);
 
     const stats = createDiscoverStats(data);
@@ -67,7 +66,7 @@ export async function runDiscover(
     );
 
     logger.info(
-        `Discovered ${data.files.length} files in ${ssocPath} and wrote the paths to ${outputPath}`,
+        `Discovered ${data.files.length} files in ${sourcePath} and wrote the paths to ${outputPath}`,
     );
 
     timeManager.stop("discover");
@@ -92,8 +91,7 @@ async function discoverFiles(rFilesPath: string): Promise<DiscoverData> {
         numberOfSourcingFiles: 0,
     };
 
-    // TODO: don't expect sources directory
-    for await (const file of globIterate(`${rFilesPath}/sources/**/*.[r|R]`, { absolute: true })) {
+    for await (const file of globIterate(`${rFilesPath}/**/*.[r|R]`, { absolute: true })) {
         // Exclude files that are binary
         if (isBinaryFileSync(file)) {
             discoverData.binaryFiles.push(file);
