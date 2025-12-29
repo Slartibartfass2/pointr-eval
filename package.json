@@ -45,7 +45,7 @@
         "glob": "^11.1.0",
         "isbinaryfile": "^5.0.4",
         "seedrandom": "^3.0.5",
-        "systeminformation": "^5.25.11",
+        "systeminformation": "^5.27.14",
         "winston": "^3.17.0"
     }
 }
