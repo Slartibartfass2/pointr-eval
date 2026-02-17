@@ -108,7 +108,7 @@ function getArgName(arg: string): string {
 
 function hasBenchmarkArg(arg: string): boolean {
     const argName = getArgName(arg);
-    return benchmarkOptions.some((option) => option.name === argName || option.alias === argName);
+    return benchmarkOptions.some((option) => option.name === argName || option["alias"] === argName);
 }
 
 export function runForConfigCombinations(

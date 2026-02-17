@@ -12,7 +12,7 @@ import {
     UltimateSlicerStats,
 } from "@eagleoutice/flowr/benchmark/summarizer/data";
 import { SummarizedMeasurement, summarizeMeasurement } from "@eagleoutice/flowr/util/summarizer";
-import { DefaultMap } from "@eagleoutice/flowr/util/defaultmap";
+import { DefaultMap } from "@eagleoutice/flowr/util/collections/defaultmap";
 import fs from "fs";
 import {
     summarizeSummarizedMeasurement,
